@@ -45,6 +45,11 @@ type ParsedResume = {
   };
 };
 
+type MiniResumeSection = {
+  title: string;
+  lines: string[];
+};
+
 const agents: Agent[] = [
   {
     name: "Recruiter",
@@ -387,11 +392,35 @@ export default function Home() {
               </div>
               <div className="arena-ring" />
               <div className="resume-hologram">
-                <span>{parsedResume ? "Parsed Resume" : "My Resume"}</span>
-                <div className="resume-avatar" />
-                {(parsedResume?.sections.slice(0, 5) ?? [null, null, null, null, null]).map((section, index) => (
-                  <i key={section?.title ?? index} />
-                ))}
+                <div className="mini-resume-page" aria-label="Mini parsed resume preview">
+                  <strong className="mini-resume-name">{getMiniResumeName(parsedResume)}</strong>
+                  <span className="mini-resume-meta">
+                    {parsedResume
+                      ? `${parsedResume.stats.wordCount} words | ${parsedResume.stats.sectionCount} sections`
+                      : "Upload resume | Parser ready"}
+                  </span>
+                  <div
+                    className="mini-resume-body"
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "minmax(0, 1fr)",
+                      gridAutoRows: "auto",
+                      gap: "2px",
+                      height: "198px",
+                      overflow: "hidden",
+                      paddingTop: "4px",
+                    }}
+                  >
+                    {getMiniResumeSections(parsedResume).map((section) => (
+                      <section className="mini-resume-section" key={section.title} style={{ minWidth: 0 }}>
+                        <h3>{section.title}</h3>
+                        {section.lines.map((line, index) => (
+                          <p key={`${section.title}-${index}`}>{line}</p>
+                        ))}
+                      </section>
+                    ))}
+                  </div>
+                </div>
               </div>
               <div className="platform-glow" />
               <div className="ats-beam" />
@@ -467,18 +496,70 @@ export default function Home() {
                 ))}
               </ul>
             </section>
-
-            {parsedResume ? (
-              <section className="resume-preview">
-                <h2 className="section-title">Parsed Text Preview</h2>
-                <p>{parsedResume.text.slice(0, 420)}</p>
-              </section>
-            ) : null}
           </aside>
         </div>
       </div>
     </main>
   );
+}
+
+function getMiniResumeName(parsedResume: ParsedResume | null) {
+  if (!parsedResume) {
+    return "RESUME";
+  }
+
+  const header = parsedResume.sections.find((section) => section.title === "Header")?.content;
+  const firstLine = header?.split("\n").find((line) => /[A-Za-z]{3}/.test(line));
+
+  return compactText(firstLine ?? parsedResume.fileName.replace(/\.[^.]+$/, ""), 26).toUpperCase();
+}
+
+function getMiniResumeSections(parsedResume: ParsedResume | null): MiniResumeSection[] {
+  if (!parsedResume) {
+    return [
+      {
+        title: "SUMMARY",
+        lines: textToMiniLines("Upload resume to render parsed words. Agents inspect every tiny line.", 3),
+      },
+      {
+        title: "EXPERIENCE",
+        lines: textToMiniLines("Impact bullets appear as document texture. Roast arena reads the extracted text.", 3),
+      },
+      {
+        title: "SKILLS",
+        lines: textToMiniLines("Keywords, sections, ATS signals, contact details, projects, and achievements.", 3),
+      },
+    ];
+  }
+
+  const sectionCount = parsedResume.sections.length;
+  const linesPerSection = sectionCount >= 10 ? 3 : sectionCount >= 7 ? 4 : 5;
+
+  return parsedResume.sections
+    .map((section) => ({
+      title: compactText(section.title, 20).toUpperCase(),
+      lines: textToMiniLines(section.content, linesPerSection),
+    }));
+}
+
+function textToMiniLines(value: string, maxLines = 2) {
+  const words = value.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  const lines: string[] = [];
+
+  for (let index = 0; index < words.length && lines.length < maxLines; index += 10) {
+    lines.push(compactText(words.slice(index, index + 10).join(" "), 70));
+  }
+
+  return lines.length ? lines : ["Parsed content available for agent review"];
+}
+
+function compactText(value: string, maxLength: number) {
+  const text = value.replace(/\s+/g, " ").trim();
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return `${text.slice(0, Math.max(0, maxLength - 1))}...`;
 }
 
 function formatFileSize(size: number) {
