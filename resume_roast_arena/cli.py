@@ -60,6 +60,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--mode", choices=["bts", "combat"], default="combat")
     parser.add_argument(
+        "--generate-latex",
+        action="store_true",
+        help=(
+            "After the full arena run, build a structured resume blueprint and "
+            "render a LaTeX resume using sample_resume_template.tex"
+        ),
+    )
+    parser.add_argument(
+        "--latex-output",
+        default="generated_resume.tex",
+        help="Output path for --generate-latex",
+    )
+    parser.add_argument(
         "--agent",
         choices=["all", "orchestrator", *AGENT_SPECS.keys()],
         default="all",
@@ -106,7 +119,26 @@ def main() -> None:
             print(json.dumps(scorecard.model_dump(), indent=2))
             return
 
-        result = ResumeRoastArena(config=config).run(context)
+        arena = ResumeRoastArena(config=config)
+        result = arena.run(context)
+
+        if args.generate_latex:
+            package = arena.build_resume_package(context, result)
+            output_path = Path(args.latex_output).resolve()
+            output_path.write_text(package.latex_source, encoding="utf-8")
+            print(
+                json.dumps(
+                    {
+                        "arena_result": package.arena_result.model_dump(),
+                        "resume_blueprint": package.resume_blueprint.model_dump(),
+                        "latex_output_path": str(output_path),
+                        "template_name": package.template_name,
+                    },
+                    indent=2,
+                )
+            )
+            return
+
         print(json.dumps(result.model_dump(), indent=2))
     except RuntimeError as exc:
         raise SystemExit(str(exc)) from exc
