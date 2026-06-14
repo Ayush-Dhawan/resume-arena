@@ -1,0 +1,13 @@
+HTTP/1.1 200 OK
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+content-disposition: attachment; filename="1781429159450-sample-resume-template.generated.pdf"
+content-type: application/pdf
+x-dummy-agent-json-path: C:\Users\dhawa\PycharmProjects\PythonProject\resume_roast_arena\resources\1781429159450-sample-resume-template.dummy-agent-output.json
+x-extracted-text-path: C:\Users\dhawa\PycharmProjects\PythonProject\resume_roast_arena\resources\1781429159450-sample-resume-template.extracted.txt
+x-generated-latex-path: C:\Users\dhawa\PycharmProjects\PythonProject\resume_roast_arena\resources\1781429159450-sample-resume-template.generated.tex
+x-generated-pdf-path: C:\Users\dhawa\PycharmProjects\PythonProject\resume_roast_arena\resources\1781429159450-sample-resume-template.generated.pdf
+Date: Sun, 14 Jun 2026 09:25:59 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Transfer-Encoding: chunked
+

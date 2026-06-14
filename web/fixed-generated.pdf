@@ -1,0 +1,113 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> /F2 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >> >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 2394 >>
+stream
+BT
+/F2 18 Tf
+54 742 Td (-0.6in) Tj
+-54 -742 Td
+/F1 9 Tf
+54 729 Td (+910000000000 | email@example.com | -0.6in) Tj
+-54 -729 Td
+/F2 11 Tf
+54 703 Td (EDUCATION) Tj
+-54 -703 Td
+/F2 10 Tf
+54 688 Td ([University/College Name] [City, Country] | [City, Country]) Tj
+-54 -688 Td
+/F1 9 Tf
+54 675 Td (B.Tech in Computer Science] -- CGPA: [X.X] / 10.0 [Start Year] -- [End Year] | CGPA: [X.X] /) Tj
+-54 -675 Td
+/F1 9 Tf
+54 662 Td (10.0 [Start Year] -- [End Year] | [Start Year] -- [End Year]) Tj
+-54 -662 Td
+/F2 11 Tf
+54 636 Td (TECHNICAL SKILLS) Tj
+-54 -636 Td
+/F1 9 Tf
+54 621 Td (Languages: TypeScript, SQL, C, HTML, CSS) Tj
+-54 -621 Td
+/F1 9 Tf
+54 608 Td (Developer Tools: Git, GitHub, Docker, AWS, Postman, Linux, VS Code) Tj
+-54 -608 Td
+/F1 9 Tf
+54 595 Td (Frameworks & Libraries: React, ReactJS, Next.js, Node.js, Express.js, MongoDB, Tailwind CSS,) Tj
+-54 -595 Td
+/F1 9 Tf
+54 582 Td (Angular, Firebase) Tj
+-54 -582 Td
+/F2 11 Tf
+54 556 Td (EXPERIENCE) Tj
+-54 -556 Td
+/F2 10 Tf
+54 541 Td ([Company Name A] [Month, Year] -- [Month, Year] | Backend Intern | [Month, Year] -- [Month,) Tj
+-54 -541 Td
+/F2 10 Tf
+54 528 Td (Year]) Tj
+-54 -528 Td
+/F1 9 Tf
+54 515 Td (- [Company Name A] [Month, Year] -- [Month, Year].) Tj
+-54 -515 Td
+/F1 9 Tf
+54 502 Td (- [Job Title e.g., Software Development Engineer Intern] [City, Country].) Tj
+-54 -502 Td
+/F1 9 Tf
+54 489 Td (- [Company Name B] [Month, Year] -- [Month, Year].) Tj
+-54 -489 Td
+/F1 9 Tf
+54 476 Td (Tech Stack: TypeScript, SQL, C, HTML, CSS, React) Tj
+-54 -476 Td
+/F2 11 Tf
+54 450 Td (PROJECTS) Tj
+-54 -450 Td
+/F2 10 Tf
+54 435 Td ([Project Name A] ReactJS, Node.js, MongoDB, Tailwind CSS | TypeScript, SQL, C, HTML, CSS) Tj
+-54 -435 Td
+/F1 9 Tf
+54 422 Td (- [Project Name A] ReactJS, Node.js, MongoDB, Tailwind CSS.) Tj
+-54 -422 Td
+/F1 9 Tf
+54 409 Td (- [Project Name B] TypeScript, Next.js, PostgreSQL, AWS.) Tj
+-54 -409 Td
+/F1 9 Tf
+54 396 Td (- [Project Name C] Angular, Firebase, Bootstrap.) Tj
+-54 -396 Td
+/F2 11 Tf
+54 370 Td (LEADERSHIP & ENGAGEMENT) Tj
+-54 -370 Td
+/F1 9 Tf
+54 355 Td (Role Alignment: Repositioned resume content around Backend Intern requirements for Acme,) Tj
+-54 -355 Td
+/F1 9 Tf
+54 342 Td (preserving only claims supported by the uploaded resume.) Tj
+-54 -342 Td
+/F2 11 Tf
+54 316 Td (CERTIFICATIONS) Tj
+-54 -316 Td
+/F1 9 Tf
+54 301 Td ($ [Certification Name A] -- [Issuing Organization] -- [Issuing Organization]) Tj
+-54 -301 Td
+ET
+endstream
+endobj
+xref
+0 5
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000354 00000 n 
+trailer
+<< /Size 5 /Root 1 0 R >>
+startxref
+2800
+%%EOF
