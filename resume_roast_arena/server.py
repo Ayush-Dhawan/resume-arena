@@ -16,10 +16,16 @@ from resume_roast_arena.config import REPO_ROOT
 from resume_roast_arena.schemas import ArenaResult, ResumeContext
 
 
+LOG_DIR = REPO_ROOT / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(LOG_DIR / "backend.log", encoding="utf-8"),
+    ],
     force=True,
 )
 logger = logging.getLogger(__name__)

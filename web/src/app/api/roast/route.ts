@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,8 @@ type RoastRequest = {
 };
 
 export async function POST(request: Request) {
+  const requestId = randomUUID().slice(0, 8);
+
   try {
     const body = (await request.json()) as RoastRequest;
 
@@ -22,25 +25,32 @@ export async function POST(request: Request) {
     }
 
     const backendUrl = process.env.RESUME_ARENA_BACKEND_URL ?? "http://127.0.0.1:8001";
+    console.info(
+      `[roast:${requestId}] Proxying roast request to ${backendUrl}/roast role="${body.targetRole ?? ""}" agents=${body.agentIds?.join(",") ?? "default"} resumeChars=${body.resumeText.length}`,
+    );
     const response = await fetch(`${backendUrl}/roast`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-request-id": requestId,
       },
       body: JSON.stringify(body),
     });
     const payload = await response.json();
 
     if (!response.ok) {
+      console.error(`[roast:${requestId}] Backend returned ${response.status}: ${getBackendError(payload)}`);
       return NextResponse.json(
         { error: getBackendError(payload) || "The roast agents could not complete the review." },
         { status: response.status },
       );
     }
 
+    console.info(`[roast:${requestId}] Roast proxy completed successfully.`);
     return NextResponse.json({ result: payload });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to run the roast arena.";
+    console.error(`[roast:${requestId}] Roast proxy failed: ${message}`);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

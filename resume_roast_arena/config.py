@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class OpenAIConfig:
     model: str = os.getenv("OPENAI_MODEL", "gpt-5-mini")
     temperature: float = float(os.getenv("OPENAI_TEMPERATURE", "0.4"))
-    timeout: int = int(os.getenv("OPENAI_TIMEOUT", "60"))
+    timeout: int = int(os.getenv("OPENAI_TIMEOUT", "120"))
 
 
 def require_openai_key() -> None:
