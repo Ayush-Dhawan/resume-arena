@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from resume_roast_arena.agents import build_all_agents
 from resume_roast_arena.config import OpenAIConfig, build_chat_model, require_openai_key
 from resume_roast_arena.council import LLMCouncil
+from resume_roast_arena.latex_renderer import LatexResumeRenderer
 from resume_roast_arena.orchestrator import OrchestratorAgent
 from resume_roast_arena.prompts import DEBATE_SYSTEM_PROMPT, SYNTHESIS_SYSTEM_PROMPT
 from resume_roast_arena.schemas import (
@@ -17,6 +18,8 @@ from resume_roast_arena.schemas import (
     CouncilDecision,
     DebateTurn,
     OrchestrationPlan,
+    ResumeBlueprint,
+    ResumeBuildResult,
     ResumeContext,
 )
 
@@ -98,6 +101,8 @@ class ResumeRoastArena:
         )
         self.orchestrator = OrchestratorAgent(self.config)
         self.council = LLMCouncil(self.config)
+        self.resume_writer = ResumeWriterAgent(self.config)
+        self.latex_renderer = LatexResumeRenderer()
 
     def review_with_agents(
         self, context: ResumeContext, agent_ids: list[str] | None = None

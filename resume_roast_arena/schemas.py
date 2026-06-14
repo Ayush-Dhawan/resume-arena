@@ -125,7 +125,104 @@ class ArenaResult(BaseModel):
     prioritized_feedback: list[FeedbackItem] = Field(default_factory=list)
     red_flags: list[FeedbackItem] = Field(default_factory=list)
     final_resume_draft: str = Field(
-        description="Plain-text improved resume draft. LaTeX generation is future scope."
+        description="Plain-text improved resume draft before optional LaTeX rendering."
     )
     ats_friendly_version_notes: list[str] = Field(default_factory=list)
     reasons_behind_changes: list[str] = Field(default_factory=list)
+
+
+class ResumeHeader(BaseModel):
+    full_name: str
+    phone: str = ""
+    email: str = ""
+    linkedin_url: str = ""
+    github_url: str = ""
+    portfolio_url: str = ""
+
+
+class EducationEntry(BaseModel):
+    institution: str
+    location: str = ""
+    credential: str
+    score_line: str = ""
+    start_date: str = ""
+    end_date: str = ""
+
+
+class SkillCategory(BaseModel):
+    label: str
+    items: list[str] = Field(default_factory=list)
+
+
+class ExperienceEntry(BaseModel):
+    company: str
+    date_range: str = ""
+    title: str
+    location: str = ""
+    bullets: list[str] = Field(default_factory=list)
+    tech_stack: list[str] = Field(default_factory=list)
+
+
+class ProjectEntry(BaseModel):
+    name: str
+    tech_stack: list[str] = Field(default_factory=list)
+    bullets: list[str] = Field(default_factory=list)
+
+
+class LeadershipEntry(BaseModel):
+    label: str
+    description: str
+
+
+class CertificationEntry(BaseModel):
+    name: str
+    issuer: str = ""
+
+
+class ResumeInsight(BaseModel):
+    category: Literal[
+        "positioning",
+        "skills",
+        "experience",
+        "projects",
+        "education",
+        "leadership",
+        "certifications",
+        "formatting",
+    ]
+    insight: str
+    evidence: str
+    applied_change: str
+    priority: Literal["high", "medium", "low"] = "medium"
+
+
+class ResumeBlueprint(BaseModel):
+    target_role: str = ""
+    target_company: str = ""
+    summary_strategy: str = Field(
+        description=(
+            "How the rewritten resume positions the candidate for the target role "
+            "within the constraints of the LaTeX template."
+        )
+    )
+    insights: list[ResumeInsight] = Field(default_factory=list)
+    header: ResumeHeader
+    education: list[EducationEntry] = Field(default_factory=list)
+    skill_categories: list[SkillCategory] = Field(default_factory=list)
+    experience: list[ExperienceEntry] = Field(default_factory=list)
+    projects: list[ProjectEntry] = Field(default_factory=list)
+    leadership: list[LeadershipEntry] = Field(default_factory=list)
+    certifications: list[CertificationEntry] = Field(default_factory=list)
+    omissions_to_verify: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Missing or ambiguous facts the user should verify before exporting the final resume."
+        ),
+    )
+
+
+class ResumeBuildResult(BaseModel):
+    arena_result: ArenaResult
+    resume_blueprint: ResumeBlueprint
+    latex_source: str
+    template_name: str = "sample_resume_template.tex"

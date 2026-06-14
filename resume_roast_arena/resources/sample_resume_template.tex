@@ -1,0 +1,205 @@
+%-------------------------
+% Modern Single-Page Resume in LaTeX
+% License : MIT
+%------------------------
+
+\documentclass[letterpaper,11pt]{article}
+
+\usepackage{latexsym}
+\usepackage[empty]{fullpage}
+\usepackage{titlesec}
+\usepackage{marvosym}
+\usepackage[usenames,dvipsnames]{xcolor}
+\usepackage{verbatim}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage[english]{babel}
+\usepackage{tabularx}
+\usepackage{fontawesome5}
+\usepackage{multicol}
+\usepackage{graphicx}
+
+% Adjust margins tightly for 1-page fit
+\addtolength{\oddsidemargin}{-0.6in}
+\addtolength{\evensidemargin}{-0.5in}
+\addtolength{\textwidth}{1.19in}
+\addtolength{\topmargin}{-0.75in}
+\addtolength{\textheight}{1.5in}
+
+\setlength{\multicolsep}{-3.0pt}
+\setlength{\columnsep}{-1pt}
+\input{glyphtounicode}
+
+% Color Definitions
+\definecolor{cvblue}{HTML}{0E5484}
+\definecolor{black}{HTML}{130810}
+\definecolor{darkcolor}{HTML}{0F4539}
+
+\colorlet{name}{black}
+\colorlet{heading}{darkcolor}
+\colorlet{headingrule}{cvblue}
+
+\urlstyle{same}
+\raggedbottom
+\raggedright
+\setlength{\tabcolsep}{0in}
+
+% Sections formatting
+\titleformat{\section}{
+  \vspace{-6pt}\scshape\raggedright\large\bfseries
+}{}{0em}{}[\color{black}\titlerule \vspace{-5pt}]
+
+% Ensure PDF is ATS-parsable
+\pdfgentounicode=1
+
+% --- Custom Commands ---
+\newcommand{\resumeItem}[1]{
+  \item\small{{#1 \vspace{-2pt}}}
+}
+
+\newcommand{\resumeSubheading}[4]{
+  \vspace{-2pt}\item
+    \begin{tabular*}{1.0\textwidth}[t]{l@{\extracolsep{\fill}}r}
+      \textbf{\large#1} & \textbf{\small #2} \\
+      \textit{\small#3} & \textit{\small #4} \\
+    \end{tabular*}\vspace{-6pt}
+}
+
+\newcommand{\resumeProjectHeading}[2]{
+    \item
+    \begin{tabular*}{1.0\textwidth}{l@{\extracolsep{\fill}}r}
+      \textbf{\large#1} & \small#2\\
+    \end{tabular*}\vspace{-6pt}
+}
+
+\renewcommand\labelitemi{$\vcenter{\hbox{\tiny$\bullet$}}$}
+\renewcommand\labelitemii{$\vcenter{\hbox{\tiny$\bullet$}}$}
+
+\newcommand{\resumeSubHeadingListStart}{\begin{itemize}[leftmargin=0.0in, label={}]}
+\newcommand{\resumeSubHeadingListEnd}{\end{itemize}}
+\newcommand{\resumeItemListStart}{\begin{itemize}[leftmargin=0.15in]}
+\newcommand{\resumeItemListEnd}{\end{itemize}\vspace{-6pt}}
+
+\newcommand\sbullet[1][.5]{\mathbin{\vcenter{\hbox{\scalebox{#1}{$\bullet$}}}}}
+
+%-------------------------------------------
+%%%%%%  RESUME STARTS HERE  %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{document}
+
+%----------HEADING----------
+\begin{center}
+    {\Huge \scshape [Firstname] [Lastname]} \\ \vspace{2pt}
+    \small
+    \href{tel:+910000000000}{\faPhone\ \underline{+91-0000000000}} ~|~
+    \href{mailto:email@example.com}{\faEnvelope\ \underline{email@example.com}} ~|~
+    \href{https://linkedin.com/}{\faLinkedin\ \underline{LinkedIn}} ~|~
+    \href{https://github.com/}{\faGithub\ \underline{GitHub}} ~|~
+    \href{https://example.com}{\faGlobe\ \underline{Portfolio Website}}
+    \vspace{-10pt}
+\end{center}
+
+%-----------EDUCATION-----------
+\section{EDUCATION}
+  \resumeSubHeadingListStart
+    \item \textbf{[University/College Name]} \hfill [City, Country] \\
+    \textit{[Degree Name e.g., B.Tech in Computer Science]} -- \textbf{CGPA: [X.X] / 10.0} \hfill \textit{[Start Year] -- [End Year]}
+    \vspace{-6pt}
+
+    \item \textbf{[High School Name]} \hfill [City, Country] \\
+    \textit{[Certification e.g., Higher Secondary Certificate]} -- \textbf{Aggregate: [XX.XX]\%} \hfill \textit{[Start Year] -- [End Year]}
+  \resumeSubHeadingListEnd
+  \vspace{-6pt}
+
+%-----------TECHNICAL SKILLS-----------
+\section{TECHNICAL SKILLS}
+ \begin{itemize}[leftmargin=0.0in, label={}]
+    \small{\item{
+     \textbf{Languages:}{ JavaScript, TypeScript, Java, SQL, Python} \\
+     \textbf{Developer Tools:}{ VS Code, Git, GitHub, Linux CLI, Postman, Docker, AWS} \\
+     \textbf{Frameworks \& Libraries:}{ ReactJS, Next.js, Node.js, Express.js, React Native, MongoDB, Tailwind CSS}
+    }}
+ \end{itemize}
+ \vspace{-12pt}
+
+%-----------EXPERIENCE-----------
+\section{EXPERIENCE}
+\resumeSubHeadingListStart
+
+  \resumeSubheading
+    {[Company Name A]}{[Month, Year] -- [Month, Year]}
+    {[Job Title e.g., Software Development Engineer Intern]}{[City, Country]}
+    \resumeItemListStart
+      \resumeItem{Engineered foundational backend APIs and mobile features for an ecosystem serving over \textbf{100,000 active users}, handling real-time application pipelines smoothly.}
+      \resumeItem{Architected a real-time web-based administration panel to stream updates instantly, contributing to a \textbf{70\% increase in UI rendering speeds} and performance optimization.}
+      \resumeItem{\textbf{Tech Stack}: React Native, ReactJS, Node.js, MongoDB, TypeScript, AWS.}
+    \resumeItemListEnd
+
+  \resumeSubheading
+    {[Company Name B]}{[Month, Year] -- [Month, Year]}
+    {[Job Title e.g., Full-Stack Engineering Consultant]}{[City, Country]}
+    \resumeItemListStart
+      \resumeItem{Shipped a high-impact Minimum Viable Product (MVP) recruitment platform from scratch, establishing scalable state patterns and responsive custom layouts.}
+      \resumeItem{Integrated efficient complex aggregation operations, virtualized multi-index lists, and optimized infinite scroll controllers to maximize interaction speeds.}
+      \resumeItem{\textbf{Tech Stack}: React Native, MERN Stack, Express.js, MongoDB, Tailwind CSS.}
+    \resumeItemListEnd
+
+  \resumeSubheading
+    {[Company Name C]}{[Month, Year] -- [Month, Year]}
+    {[Job Title e.g., Backend Engineering Intern]}{[City, Country]}
+    \resumeItemListStart
+      \resumeItem{Configured local environment communication loops with open-source Large Language Models (LLM) to drive live technical coaching assistance panels.}
+      \resumeItem{Constructed an asynchronous testing engine leveraging vast database matrices, servicing adaptive flows for \textbf{hundreds of concurrent users}.}
+      \resumeItem{\textbf{Tech Stack}: Node.js, API Integrations, Java, NoSQL Databases.}
+    \resumeItemListEnd
+
+\resumeSubHeadingListEnd
+\vspace{-8pt}
+
+%-----------PROJECTS-----------
+\section{PROJECTS}
+    \resumeSubHeadingListStart
+
+      \resumeProjectHeading
+        {[Project Name A]}{\textit{ReactJS, Node.js, MongoDB, Tailwind CSS}}
+        \resumeItemListStart
+          \resumeItem{Developed an enterprise administration cockpit featuring comprehensive data visualization analytics and regression modules for demand predictions.}
+          \resumeItem{Assembled real-time automation channels managing physical statuses, user check-ins, and point-of-sale configurations concurrently.}
+        \resumeItemListEnd
+
+      \resumeProjectHeading
+        {[Project Name B]}{\textit{TypeScript, Next.js, PostgreSQL, AWS}}
+        \resumeItemListStart
+          \resumeItem{Deployed a secure multi-tier catalog management platform backed by structured, type-safe REST routes and scalable object storage strategies.}
+          \resumeItem{Created clean interface panels allowing decentralized user networks to seamlessly curate, distribute, and track custom documentation assets.}
+        \resumeItemListEnd
+
+      \resumeProjectHeading
+        {[Project Name C]}{\textit{Angular, Firebase, Bootstrap}}
+        \resumeItemListStart
+          \resumeItem{Built a responsive publication layout platform featuring explicit category segregation loops and low-latency global cache updates.}
+          \resumeItem{Engineered an embedded text-editing workbench supporting rich text manipulation, localized asset rendering, and high-speed data state saving.}
+        \resumeItemListEnd
+
+\resumeSubHeadingListEnd
+\vspace{-8pt}
+
+%-----------LEADERSHIP & ENGAGEMENT-----------
+\section{LEADERSHIP \& ENGAGEMENT}
+ \begin{itemize}[leftmargin=0.15in, label={\tiny$\bullet$}]
+    \resumeItem{\textbf{Core Engineering Infrastructure:} Developed and scaled institutional web portals, directly boosting operations availability for over 100 staff and user accounts.}
+    \resumeItem{\textbf{Competitive Hackathons:} Selected Participant at corporate product sprints including JPMorganChase Code for Good '24.}
+    \resumeItem{\textbf{Team Leadership:} Represented and secured victories for the engineering branch at flagship innovation arenas including SIH '23 and Multicon '24.}
+ \end{itemize}
+ \vspace{-10pt}
+
+%-----------CERTIFICATIONS---------------
+\section{CERTIFICATIONS}
+\small{
+$\sbullet[.75] \hspace{0.1cm}$ [Certification Name A] -- [Issuing Organization] \hspace{1cm}
+$\sbullet[.75] \hspace{0.1cm}$ [Certification Name B] -- [Issuing Organization] \\
+$\sbullet[.75] \hspace{0.1cm}$ [Certification Name C] -- [Issuing Organization] \hspace{1cm}
+$\sbullet[.75] \hspace{0.1cm}$ [Certification Name D] -- [Issuing Organization]
+}
+
+\end{document}
