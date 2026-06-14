@@ -109,6 +109,25 @@ type ArenaResult = {
   reasons_behind_changes: string[];
 };
 
+type CopilotMessage = {
+  id: string;
+  role: "editor" | "user" | "system";
+  text: string;
+};
+
+type ResumeEditChange = {
+  id: string;
+  source: string;
+  title: string;
+  evidence: string;
+  recommendation: string;
+  before: string;
+  after: string;
+  question?: string;
+  answer?: string;
+  status: "needs_input" | "ready" | "applied";
+};
+
 const agents: Agent[] = [
   {
     backendId: "recruiter",
@@ -265,6 +284,41 @@ function ArenaAgent({ agent, active, roasting }: { agent: Agent; active: boolean
   );
 }
 
+function FeedbackGroup({
+  title,
+  items,
+  agentId,
+}: {
+  title: string;
+  items: FeedbackItem[];
+  agentId: string;
+}) {
+  if (!items.length) {
+    return null;
+  }
+
+  return (
+    <details className="feedback-group" open={title === "Red Flags" || title === "Change"}>
+      <summary>
+        <span>{title}</span>
+        <strong>{items.length}</strong>
+      </summary>
+      <ul>
+        {items.map((item, index) => (
+          <li key={`${agentId}-${title}-${item.title}-${index}`}>
+            <div>
+              <span>{item.priority}</span>
+              <strong>{item.title}</strong>
+            </div>
+            <p>{item.evidence}</p>
+            <p>{item.recommendation}</p>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 export default function Home() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [parsedResume, setParsedResume] = useState<ParsedResume | null>(null);
@@ -277,6 +331,13 @@ export default function Home() {
   const [targetCompany, setTargetCompany] = useState("");
   const [experienceLevel, setExperienceLevel] = useState("mid");
   const [jobDescription, setJobDescription] = useState("");
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [copilotInput, setCopilotInput] = useState("");
+  const [copilotMessages, setCopilotMessages] = useState<CopilotMessage[]>([]);
+  const [editChanges, setEditChanges] = useState<ResumeEditChange[]>([]);
+  const [improvedResumeDraft, setImprovedResumeDraft] = useState("");
+  const [metricAnswerMap, setMetricAnswerMap] = useState<Record<string, string>>({});
+  const [isGeneratingResume, setIsGeneratingResume] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scorecardByAgentId = useMemo(() => {
@@ -318,6 +379,9 @@ export default function Home() {
   );
   const redFlags = arenaResult?.red_flags.map((flag) => flag.title) ?? defaultRedFlags;
   const councilScore = arenaResult?.council_decision?.shortlist_readiness_score;
+  const activeEditQuestion = editChanges.find((change) => change.status === "needs_input");
+  const readyEditCount = editChanges.filter((change) => change.status === "ready").length;
+  const appliedEditCount = editChanges.filter((change) => change.status === "applied").length;
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -332,6 +396,7 @@ export default function Home() {
     setUploadError(null);
     setRoastError(null);
     setArenaResult(null);
+    resetCopilot();
 
     const formData = new FormData();
     formData.append("resume", file);
@@ -390,11 +455,190 @@ export default function Home() {
       }
 
       setArenaResult(payload.result);
+      initializeCopilot(payload.result);
     } catch (error) {
       setRoastError(error instanceof Error ? error.message : "The arena could not finish this roast.");
     } finally {
       setIsRoasting(false);
     }
+  }
+
+  function submitCopilotMessage() {
+    const value = copilotInput.trim();
+    if (!value) {
+      return;
+    }
+
+    setCopilotInput("");
+    setCopilotMessages((messages) => [
+      ...messages,
+      {
+        id: crypto.randomUUID(),
+        role: "user",
+        text: value,
+      },
+    ]);
+
+    if (!activeEditQuestion) {
+      setCopilotMessages((messages) => [
+        ...messages,
+        {
+          id: crypto.randomUUID(),
+          role: "editor",
+          text: "Noted. I will use that as extra evidence for the next rewrite pass.",
+        },
+      ]);
+      return;
+    }
+
+    const updatedChange = answerEditQuestion(activeEditQuestion, value);
+    let nextQuestion: ResumeEditChange | undefined;
+
+    setMetricAnswerMap((answers) => ({
+      ...answers,
+      [activeEditQuestion.id]: value,
+    }));
+    setEditChanges((changes) => {
+      const nextChanges = changes.map((change) =>
+        change.id === activeEditQuestion.id ? updatedChange : change,
+      );
+      nextQuestion = nextChanges.find((change) => change.status === "needs_input");
+      return nextChanges;
+    });
+
+    window.setTimeout(() => {
+      setCopilotMessages((messages) => [
+        ...messages,
+        {
+          id: crypto.randomUUID(),
+          role: "editor",
+          text: `Updated "${updatedChange.title}". I replaced the vague claim with your evidence: ${value}`,
+        },
+        {
+          id: crypto.randomUUID(),
+          role: "editor",
+          text: nextQuestion?.question ?? "No more missing proof right now. The ready changes can be applied to the resume draft.",
+        },
+      ]);
+    }, 0);
+  }
+
+  function applyReadyEdits() {
+    const count = editChanges.filter((change) => change.status === "ready").length;
+    if (!count) {
+      return;
+    }
+
+    setEditChanges((changes) =>
+      changes.map((change) =>
+        change.status === "ready" ? { ...change, status: "applied" } : change,
+      ),
+    );
+    setCopilotMessages((messages) => [
+      ...messages,
+      {
+        id: crypto.randomUUID(),
+        role: "editor",
+        text: `Applied ${count} evidence-backed resume edit${count === 1 ? "" : "s"}.`,
+      },
+    ]);
+  }
+
+  async function generateImprovedResume() {
+    if (!arenaResult || !parsedResume || isGeneratingResume) {
+      return;
+    }
+
+    const usableChanges = editChanges.filter((change) => change.status === "ready" || change.status === "applied");
+    const blockedChanges = editChanges.filter((change) => change.status === "needs_input");
+    const draft = buildImprovedResumeDraft({
+      arenaResult,
+      targetRole,
+      targetCompany,
+      usableChanges,
+      blockedChanges,
+      metricAnswerMap,
+    });
+
+    setImprovedResumeDraft(draft);
+    setIsCopilotOpen(true);
+
+    try {
+      setIsGeneratingResume(true);
+      const response = await fetch("/api/resume/improve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          parsedResume,
+          targetRole,
+          targetCompany,
+          editChanges,
+          metricAnswers: metricAnswerMap,
+          draft,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error ?? "Could not generate improved resume PDF.");
+      }
+
+      const pdf = await response.blob();
+      const url = window.URL.createObjectURL(pdf);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${slugifyForDownload(parsedResume.fileName || "improved-resume")}-improved.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      setCopilotMessages((messages) => [
+        ...messages,
+        {
+          id: crypto.randomUUID(),
+          role: "editor",
+          text: blockedChanges.length
+            ? `Downloaded the improved resume PDF with ${usableChanges.length} verified edits. ${blockedChanges.length} unresolved edits were left out instead of guessed.`
+            : `Downloaded the improved resume PDF using ${usableChanges.length} verified edits from the agent output.`,
+        },
+      ]);
+    } catch (error) {
+      setCopilotMessages((messages) => [
+        ...messages,
+        {
+          id: crypto.randomUUID(),
+          role: "editor",
+          text: error instanceof Error ? error.message : "Could not generate improved resume PDF.",
+        },
+      ]);
+    } finally {
+      setIsGeneratingResume(false);
+    }
+  }
+
+  function startImproveResume() {
+    if (!arenaResult) {
+      return;
+    }
+
+    if (!editChanges.length) {
+      initializeCopilot(arenaResult);
+    }
+
+    setIsCopilotOpen(true);
+    setCopilotMessages((messages) => [
+      ...messages,
+      {
+        id: crypto.randomUUID(),
+        role: "editor",
+        text: activeEditQuestion
+          ? activeEditQuestion.question ?? "I need one missing detail before I can improve this resume safely."
+          : "I am ready to improve the resume using the agent feedback. Review the edit queue, answer any proof questions, then apply the ready edits.",
+      },
+    ]);
   }
 
   function handleFile(file?: File) {
@@ -403,6 +647,40 @@ export default function Home() {
     }
 
     void parseResume(file);
+  }
+
+  function resetCopilot() {
+    setCopilotMessages([]);
+    setEditChanges([]);
+    setIsCopilotOpen(false);
+    setCopilotInput("");
+    setImprovedResumeDraft("");
+    setMetricAnswerMap({});
+    setIsGeneratingResume(false);
+  }
+
+  function initializeCopilot(result: ArenaResult) {
+    const changes = buildResumeEditChanges(result);
+    const firstQuestion = changes.find((change) => change.status === "needs_input");
+
+    setEditChanges(changes);
+    setImprovedResumeDraft("");
+    setMetricAnswerMap({});
+    setIsCopilotOpen(false);
+    setCopilotMessages([
+      {
+        id: crypto.randomUUID(),
+        role: "system",
+        text: `Agent council complete. ${changes.length} resume edits queued from recruiter, ATS, hiring-manager, founder, and friend feedback.`,
+      },
+      {
+        id: crypto.randomUUID(),
+        role: "editor",
+        text: firstQuestion
+          ? firstQuestion.question ?? "I need one missing detail before I can write the strongest version."
+          : "I found enough evidence to prepare the first rewrite pass. Review the queued changes and apply the ones that look right.",
+      },
+    ]);
   }
 
   return (
@@ -426,6 +704,9 @@ export default function Home() {
             </button>
             <button className="new-roast-button" disabled={!parsedResume || isParsing || isRoasting} onClick={() => void runRoast()}>
               {isRoasting ? "Roasting..." : "New Roast"}
+            </button>
+            <button className="improve-resume-button" disabled={!arenaResult || isRoasting} onClick={startImproveResume}>
+              Edit Resume
             </button>
           </div>
         </header>
@@ -550,6 +831,10 @@ export default function Home() {
 
             <button className="enter-button" disabled={!parsedResume || isParsing || isRoasting} onClick={() => void runRoast()}>
               {isRoasting ? "Agents Roasting..." : "Enter Arena"} <span>x</span>
+            </button>
+
+            <button className="improve-button" disabled={!arenaResult || isRoasting} onClick={startImproveResume}>
+              Edit Resume With Copilot
             </button>
 
             <div className="pro-tip mt-auto">
@@ -683,11 +968,342 @@ export default function Home() {
                 ))}
               </ul>
             </section>
+
+            <section className="agent-comments">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="section-title text-[#38dbe0]">Full Agent Output</h2>
+                <span>{arenaResult?.scorecards.length ?? 0}</span>
+              </div>
+              {arenaResult?.scorecards.length ? (
+                <div className="agent-comment-list">
+                  {arenaResult.scorecards.map((scorecard) => (
+                    <article className="agent-comment-card" key={scorecard.agent_id}>
+                      <div className="agent-comment-head">
+                        <strong>{scorecard.agent_name}</strong>
+                        <span>{scorecard.overall_score}/100</span>
+                      </div>
+                      <div className="agent-score-grid">
+                        <span>Role {scorecard.role_fit_score}</span>
+                        <span>Clarity {scorecard.clarity_score}</span>
+                        <span>ATS {scorecard.ats_score}</span>
+                        <span>Impact {scorecard.impact_score}</span>
+                      </div>
+                      <p>{scorecard.verdict}</p>
+                      <blockquote>{scorecard.roast_line}</blockquote>
+                      <FeedbackGroup title="Strengths" items={scorecard.strengths} agentId={scorecard.agent_id} />
+                      <FeedbackGroup title="Red Flags" items={scorecard.red_flags} agentId={scorecard.agent_id} />
+                      <FeedbackGroup title="Add" items={scorecard.add_suggestions} agentId={scorecard.agent_id} />
+                      <FeedbackGroup title="Remove" items={scorecard.remove_suggestions} agentId={scorecard.agent_id} />
+                      <FeedbackGroup title="Change" items={scorecard.change_suggestions} agentId={scorecard.agent_id} />
+                      <FeedbackGroup title="Formatting" items={scorecard.formatting_improvements} agentId={scorecard.agent_id} />
+                      {scorecard.ats_keywords_to_add.length ? (
+                        <div className="agent-keywords">
+                          <h3>ATS Keywords</h3>
+                          <p>{scorecard.ats_keywords_to_add.join(", ")}</p>
+                        </div>
+                      ) : null}
+                      {scorecard.bullet_rewrites.length ? (
+                        <div className="agent-bullets">
+                          <h3>Bullet Rewrites</h3>
+                          {scorecard.bullet_rewrites.map((bullet, index) => (
+                            <p key={`${scorecard.agent_id}-bullet-${index}`}>{bullet}</p>
+                          ))}
+                        </div>
+                      ) : null}
+                      <div className="agent-reasoning">
+                        <h3>Reasoning</h3>
+                        <p>{scorecard.reasoning}</p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="agent-comments-empty">
+                  {isRoasting
+                    ? "Agents are reviewing in parallel. Their comments will appear here when the council returns."
+                    : "Run the arena to see each agent's detailed critique."}
+                </p>
+              )}
+            </section>
           </aside>
         </div>
       </div>
+      {isCopilotOpen ? (
+        <section className="copilot-window" aria-label="Resume edit copilot">
+          <div className="copilot-shell">
+            <header className="copilot-header">
+              <div>
+                <h2>Resume Edit Agent</h2>
+                <p>{activeEditQuestion ? "Asking for proof before editing" : "Evidence-backed edits queued"}</p>
+              </div>
+              <button
+                className="copilot-close-button"
+                type="button"
+                onClick={() => setIsCopilotOpen(false)}
+                aria-label="Close resume edit agent"
+              >
+                ×
+              </button>
+            </header>
+
+            <div className="copilot-stats">
+              <span>{editChanges.length} queued</span>
+              <span>{readyEditCount} ready</span>
+              <span>{appliedEditCount} applied</span>
+            </div>
+
+            {activeEditQuestion ? (
+              <article className="active-proof-card">
+                <span>Answer needed now</span>
+                <strong>{activeEditQuestion.title}</strong>
+                <p>{activeEditQuestion.question}</p>
+                <small>
+                  Saved as <code>{activeEditQuestion.id}</code>
+                </small>
+              </article>
+            ) : null}
+
+            <div className="copilot-messages">
+              {copilotMessages.length ? (
+                copilotMessages.map((message) => (
+                  <article className={`copilot-message ${message.role}`} key={message.id}>
+                    <strong>{message.role === "user" ? "You" : message.role === "system" ? "Council" : "Editor"}</strong>
+                    <p>{message.text}</p>
+                  </article>
+                ))
+              ) : (
+                <article className="copilot-message system">
+                  <strong>Council</strong>
+                  <p>Run a roast and I will convert agent feedback into precise resume edits.</p>
+                </article>
+              )}
+            </div>
+
+            <div className="edit-queue">
+              {editChanges.slice(0, 5).map((change) => (
+                <article className={`edit-card ${change.status}`} key={change.id}>
+                  <div>
+                    <strong>{change.title}</strong>
+                    <span>{change.source}</span>
+                  </div>
+                  <p>{change.evidence}</p>
+                  <dl>
+                    <div>
+                      <dt>Before</dt>
+                      <dd>{change.before}</dd>
+                    </div>
+                    <div>
+                      <dt>After</dt>
+                      <dd>{change.after}</dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+
+            <form
+              className="copilot-input"
+              onSubmit={(event) => {
+                event.preventDefault();
+                submitCopilotMessage();
+              }}
+            >
+              <input
+                value={copilotInput}
+                onChange={(event) => setCopilotInput(event.target.value)}
+                placeholder={activeEditQuestion?.question ?? "Add evidence, constraints, or a correction..."}
+              />
+              <button type="submit">Send</button>
+            </form>
+            <button
+              className="apply-edits-button"
+              type="button"
+              disabled={!readyEditCount}
+              onClick={applyReadyEdits}
+            >
+              Apply Ready Edits
+            </button>
+            <button
+              className="generate-draft-button"
+              type="button"
+              disabled={!arenaResult || !parsedResume || !editChanges.length || isGeneratingResume}
+              onClick={() => void generateImprovedResume()}
+            >
+              {isGeneratingResume ? "Generating PDF..." : "Generate Improved Resume"}
+            </button>
+            {improvedResumeDraft ? (
+              <pre className="improved-resume-draft">{improvedResumeDraft}</pre>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
     </main>
   );
+}
+
+function buildResumeEditChanges(arenaResult: ArenaResult): ResumeEditChange[] {
+  const feedback = [
+    ...arenaResult.prioritized_feedback,
+    ...arenaResult.red_flags,
+    ...arenaResult.scorecards.flatMap((scorecard) => [
+      ...scorecard.change_suggestions,
+      ...scorecard.add_suggestions,
+      ...scorecard.formatting_improvements,
+    ]),
+  ];
+  const seen = new Set<string>();
+  const changes = feedback
+    .filter((item) => item.title && !seen.has(item.title.toLowerCase()))
+    .map((item, index) => {
+      seen.add(item.title.toLowerCase());
+      const needsInput = needsUserProof(item);
+      return {
+        id: `feedback-${index}`,
+        source: inferSource(arenaResult, item),
+        title: item.title,
+        evidence: item.evidence || "Agent feedback did not include direct evidence.",
+        recommendation: item.recommendation,
+        before: compactText(item.evidence || item.title, 120),
+        after: needsInput
+          ? "Waiting for your exact evidence before writing this bullet."
+          : rewriteFromFeedback(item),
+        question: needsInput ? buildClarifyingQuestion(item) : undefined,
+        status: needsInput ? "needs_input" : "ready",
+      } satisfies ResumeEditChange;
+    })
+    .slice(0, 8);
+
+  if (!changes.length && arenaResult.final_resume_draft) {
+    return [
+      {
+        id: "draft-0",
+        source: "Synthesizer",
+        title: "Use final draft as baseline",
+        evidence: "The council produced a consolidated resume draft.",
+        recommendation: "Use the generated draft as the first rewrite pass.",
+        before: "Original resume text",
+        after: compactText(arenaResult.final_resume_draft, 160),
+        status: "ready",
+      },
+    ];
+  }
+
+  return changes;
+}
+
+function needsUserProof(item: FeedbackItem) {
+  const text = `${item.title} ${item.evidence} ${item.recommendation}`.toLowerCase();
+  return [
+    "metric",
+    "quant",
+    "faster",
+    "increase",
+    "decrease",
+    "improve",
+    "scale",
+    "users",
+    "latency",
+    "performance",
+    "impact",
+    "revenue",
+    "cost",
+  ].some((keyword) => text.includes(keyword));
+}
+
+function buildClarifyingQuestion(item: FeedbackItem) {
+  const text = `${item.title} ${item.recommendation}`.toLowerCase();
+  if (text.includes("faster") || text.includes("latency") || text.includes("performance")) {
+    return `For "${item.title}", what exact performance change can you truthfully claim? Example: reduced API latency from 900ms to 320ms, or made page load 35% faster.`;
+  }
+  if (text.includes("users") || text.includes("scale")) {
+    return `For "${item.title}", what scale number is accurate? Example: users served, requests/day, records processed, team size, or traffic handled.`;
+  }
+  if (text.includes("increase") || text.includes("decrease") || text.includes("revenue") || text.includes("cost")) {
+    return `For "${item.title}", what measurable business result is true? Give the before/after, percentage, or exact number if you have it.`;
+  }
+  return `For "${item.title}", what specific evidence should I use so the rewrite does not invent anything?`;
+}
+
+function answerEditQuestion(change: ResumeEditChange, answer: string): ResumeEditChange {
+  return {
+    ...change,
+    answer,
+    status: "ready",
+    after: `${change.recommendation.replace(/\.$/, "")}, backed by: ${answer}.`,
+  };
+}
+
+function buildImprovedResumeDraft({
+  arenaResult,
+  targetRole,
+  targetCompany,
+  usableChanges,
+  blockedChanges,
+  metricAnswerMap,
+}: {
+  arenaResult: ArenaResult;
+  targetRole: string;
+  targetCompany: string;
+  usableChanges: ResumeEditChange[];
+  blockedChanges: ResumeEditChange[];
+  metricAnswerMap: Record<string, string>;
+}) {
+  const agentBullets = arenaResult.scorecards.flatMap((scorecard) => scorecard.bullet_rewrites);
+
+  return [
+    "IMPROVED RESUME WORKING DRAFT",
+    "",
+    "Target",
+    `${targetRole || "Target role"}${targetCompany ? ` at ${targetCompany}` : ""}`,
+    "",
+    "Verified Improvements",
+    ...(usableChanges.length
+      ? usableChanges.map((change) => {
+          const answer = metricAnswerMap[change.id] || change.answer;
+          return `- ${answer ? `${change.after} Proof: ${answer}` : change.after}`;
+        })
+      : ["- No verified edits are ready yet. Answer the Copilot questions first."]),
+    "",
+    "Agent Bullet Rewrite Suggestions",
+    ...(agentBullets.length ? agentBullets.map((bullet) => `- ${bullet}`) : ["- No direct bullet rewrites were returned by the agents."]),
+    "",
+    "Needs Your Confirmation",
+    ...(blockedChanges.length
+      ? blockedChanges.map((change) => `- ${change.question ?? change.title}`)
+      : ["- No unresolved proof questions right now."]),
+  ].join("\n");
+}
+
+function slugifyForDownload(value: string) {
+  return (
+    value
+      .toLowerCase()
+      .replace(/\.[^.]+$/, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 48) || "resume"
+  );
+}
+
+function rewriteFromFeedback(item: FeedbackItem) {
+  const recommendation = item.recommendation.replace(/\s+/g, " ").trim();
+  if (!recommendation) {
+    return "Rewrite ready once the exact resume line is selected.";
+  }
+  return recommendation.endsWith(".") ? recommendation : `${recommendation}.`;
+}
+
+function inferSource(arenaResult: ArenaResult, item: FeedbackItem) {
+  const owner = arenaResult.scorecards.find((scorecard) =>
+    [
+      ...scorecard.change_suggestions,
+      ...scorecard.add_suggestions,
+      ...scorecard.formatting_improvements,
+      ...scorecard.red_flags,
+    ].some((feedback) => feedback.title === item.title),
+  );
+
+  return owner?.agent_name || "Council";
 }
 
 function getMiniResumeName(parsedResume: ParsedResume | null) {

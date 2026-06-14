@@ -19,14 +19,15 @@ export async function POST(request: Request) {
 
   try {
     const body = (await request.json()) as RoastRequest;
+    const resumeText = normalizeString(body.resumeText);
 
-    if (!body.resumeText?.trim()) {
+    if (!resumeText) {
       return NextResponse.json({ error: "Upload and parse a resume before starting a roast." }, { status: 400 });
     }
 
     const backendUrl = process.env.RESUME_ARENA_BACKEND_URL ?? "http://127.0.0.1:8001";
     console.info(
-      `[roast:${requestId}] Proxying roast request to ${backendUrl}/roast role="${body.targetRole ?? ""}" agents=${body.agentIds?.join(",") ?? "default"} resumeChars=${body.resumeText.length}`,
+      `[roast:${requestId}] Proxying roast request to ${backendUrl}/roast role="${body.targetRole ?? ""}" agents=${body.agentIds?.join(",") ?? "default"} resumeChars=${resumeText.length}`,
     );
     const response = await fetch(`${backendUrl}/roast`, {
       method: "POST",
@@ -34,7 +35,15 @@ export async function POST(request: Request) {
         "Content-Type": "application/json",
         "x-request-id": requestId,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        ...body,
+        resumeText,
+        jobDescription: normalizeString(body.jobDescription),
+        targetRole: normalizeString(body.targetRole),
+        targetCompany: normalizeString(body.targetCompany),
+        experienceLevel: normalizeString(body.experienceLevel),
+        preferredTone: normalizeString(body.preferredTone),
+      }),
     });
     const payload = await response.json();
 
@@ -53,6 +62,10 @@ export async function POST(request: Request) {
     console.error(`[roast:${requestId}] Roast proxy failed: ${message}`);
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+function normalizeString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function getBackendError(payload: unknown) {

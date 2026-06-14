@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from resume_roast_arena.agents import build_all_agents
 from resume_roast_arena.config import OpenAIConfig, build_chat_model, require_openai_key
 from resume_roast_arena.council import LLMCouncil
+from resume_roast_arena.latex_renderer import LatexResumeRenderer
 from resume_roast_arena.orchestrator import OrchestratorAgent
 from resume_roast_arena.prompts import DEBATE_SYSTEM_PROMPT, SYNTHESIS_SYSTEM_PROMPT
 from resume_roast_arena.schemas import (
@@ -20,8 +21,11 @@ from resume_roast_arena.schemas import (
     DebateTurn,
     FeedbackItem,
     OrchestrationPlan,
+    ResumeBlueprint,
+    ResumeBuildResult,
     ResumeContext,
 )
+from resume_roast_arena.writer import ResumeWriterAgent
 
 
 logger = logging.getLogger(__name__)
@@ -94,13 +98,48 @@ class ResumeRoastArena:
         logger.info("Initializing ResumeRoastArena.")
         require_openai_key()
         self.config = config or OpenAIConfig()
-        self.llm = build_chat_model(self.config)
-        self.debate_chain = DEBATE_PROMPT | self.llm.with_structured_output(DebateTurns)
-        self.synthesis_chain = SYNTHESIS_PROMPT | self.llm.with_structured_output(
-            ArenaResult
-        )
-        self.orchestrator = OrchestratorAgent(self.config)
-        self.council = LLMCouncil(self.config)
+        self.llm = None
+        self.debate_chain = None
+        self.synthesis_chain = None
+        self.orchestrator = None
+        self.council = None
+        self.resume_writer = None
+        self.latex_renderer = LatexResumeRenderer()
+
+    def _get_llm(self):
+        if self.llm is None:
+            self.llm = build_chat_model(self.config)
+        return self.llm
+
+    def _get_debate_chain(self):
+        if self.debate_chain is None:
+            self.debate_chain = DEBATE_PROMPT | self._get_llm().with_structured_output(
+                DebateTurns
+            )
+        return self.debate_chain
+
+    def _get_synthesis_chain(self):
+        if self.synthesis_chain is None:
+            self.synthesis_chain = (
+                SYNTHESIS_PROMPT
+                | self._get_llm().with_structured_output(ArenaResult)
+            )
+        return self.synthesis_chain
+
+    def _get_orchestrator(self) -> OrchestratorAgent:
+        if self.orchestrator is None:
+            self.orchestrator = OrchestratorAgent(self.config)
+        return self.orchestrator
+
+    def _get_council(self) -> LLMCouncil:
+        if self.council is None:
+            self.council = LLMCouncil(self.config)
+        return self.council
+
+    def _get_resume_writer(self) -> ResumeWriterAgent:
+        if self.resume_writer is None:
+            self.resume_writer = ResumeWriterAgent(self.config)
+        return self.resume_writer
 
     def review_with_agents(
         self, context: ResumeContext, agent_ids: list[str] | None = None
@@ -121,19 +160,21 @@ class ResumeRoastArena:
             "Running persona reviews. agents=%s",
             [agent.spec.agent_id for agent in agents],
         )
-        if len(agents) == 1:
-            scorecards = [agents[0].review(context)]
-        else:
-            scorecards_by_id: dict[str, AgentScorecard] = {}
-            with ThreadPoolExecutor(max_workers=min(len(agents), 6)) as executor:
-                futures = {
-                    executor.submit(agent.review, context): agent.spec.agent_id
-                    for agent in agents
-                }
-                for future in as_completed(futures):
-                    agent_id = futures[future]
-                    scorecards_by_id[agent_id] = future.result()
-            scorecards = [scorecards_by_id[agent.spec.agent_id] for agent in agents]
+        scorecards_by_agent_id: dict[str, AgentScorecard] = {}
+        with ThreadPoolExecutor(max_workers=min(len(agents), 6) or 1) as executor:
+            futures = {
+                executor.submit(agent.review, context): agent.spec.agent_id
+                for agent in agents
+            }
+            for future in as_completed(futures):
+                agent_id = futures[future]
+                scorecards_by_agent_id[agent_id] = future.result()
+
+        scorecards = [
+            scorecards_by_agent_id[agent.spec.agent_id]
+            for agent in agents
+            if agent.spec.agent_id in scorecards_by_agent_id
+        ]
         logger.info(
             "Persona reviews completed. count=%s elapsed_ms=%s",
             len(scorecards),
@@ -149,7 +190,7 @@ class ResumeRoastArena:
             return []
         started_at = perf_counter()
         logger.info("Debate generation started. scorecards=%s", len(scorecards))
-        result = self.debate_chain.invoke(
+        result = self._get_debate_chain().invoke(
             {
                 "target_role": context.target_role or "Not specified",
                 "target_company": context.target_company or "Not specified",
@@ -180,7 +221,7 @@ class ResumeRoastArena:
             len(debate),
             council_decision is not None,
         )
-        result = self.synthesis_chain.invoke(
+        result = self._get_synthesis_chain().invoke(
             {
                 "mode": context.mode,
                 "target_role": context.target_role or "Not specified",
@@ -212,220 +253,6 @@ class ResumeRoastArena:
         )
         return result
 
-    def assemble_from_agent_reviews(
-        self,
-        context: ResumeContext,
-        scorecards: list[AgentScorecard],
-        orchestration_plan: OrchestrationPlan,
-    ) -> ArenaResult:
-        """Build a low-latency arena result from completed agent reviews."""
-        started_at = perf_counter()
-        logger.info(
-            "Assembling arena result from agent reviews. scorecards=%s mode=%s",
-            len(scorecards),
-            context.mode,
-        )
-        debate = self._build_debate_from_scorecards(context, scorecards)
-        council_decision = self._build_council_from_scorecards(scorecards)
-        prioritized_feedback = self._collect_feedback(
-            scorecards,
-            "change_suggestions",
-            "add_suggestions",
-            "formatting_improvements",
-        )
-        red_flags = self._collect_feedback(scorecards, "red_flags")
-        result = ArenaResult(
-            mode=context.mode,
-            orchestration_plan=orchestration_plan,
-            scorecards=scorecards,
-            debate=debate,
-            council_decision=council_decision,
-            prioritized_feedback=prioritized_feedback[:8],
-            red_flags=red_flags[:6],
-            final_resume_draft=self._build_draft_note(context, prioritized_feedback),
-            ats_friendly_version_notes=self._build_ats_notes(scorecards),
-            reasons_behind_changes=[
-                "This fast arena response is assembled from the live agent scorecards.",
-                "The extra council and final synthesis LLM passes are skipped for UI latency.",
-                "Recommendations are grounded in the uploaded resume text and selected target role.",
-            ],
-        )
-        logger.info(
-            "Arena result assembled from reviews. debate_turns=%s feedback=%s elapsed_ms=%s",
-            len(result.debate),
-            len(result.prioritized_feedback),
-            round((perf_counter() - started_at) * 1000),
-        )
-        return result
-
-    def _build_debate_from_scorecards(
-        self, context: ResumeContext, scorecards: list[AgentScorecard]
-    ) -> list[DebateTurn]:
-        if context.mode != "combat" or len(scorecards) < 2:
-            return []
-
-        turns: list[DebateTurn] = []
-        for index, scorecard in enumerate(scorecards):
-            challenged = min(
-                scorecards,
-                key=lambda other: (
-                    other.overall_score,
-                    other.agent_id == scorecard.agent_id,
-                ),
-            )
-            action_item = self._first_action_item(scorecard)
-            turns.append(
-                DebateTurn(
-                    speaker_agent_id=scorecard.agent_id,
-                    message=f"{scorecard.roast_line} {scorecard.verdict}",
-                    agrees_with=[
-                        previous.agent_id
-                        for previous in scorecards[:index]
-                        if previous.overall_score >= scorecard.overall_score
-                    ][:2],
-                    challenges=(
-                        [challenged.agent_id]
-                        if challenged.agent_id != scorecard.agent_id
-                        else []
-                    ),
-                    action_item=action_item,
-                )
-            )
-        return turns
-
-    def _build_council_from_scorecards(
-        self, scorecards: list[AgentScorecard]
-    ) -> CouncilDecision:
-        if not scorecards:
-            raise ValueError("Cannot build a council decision without scorecards.")
-
-        average_score = round(
-            sum(scorecard.overall_score for scorecard in scorecards) / len(scorecards)
-        )
-        if average_score >= 78:
-            verdict = "strong_resume"
-        elif average_score >= 60:
-            verdict = "promising_needs_polish"
-        elif average_score >= 45:
-            verdict = "not_targeted_enough"
-        else:
-            verdict = "needs_major_revision"
-
-        weakest = sorted(scorecards, key=lambda scorecard: scorecard.overall_score)[:2]
-        strongest = max(scorecards, key=lambda scorecard: scorecard.overall_score)
-        return CouncilDecision(
-            council_verdict=verdict,
-            shortlist_readiness_score=average_score,
-            consensus_summary=(
-                f"{len(scorecards)} agents reviewed the resume. Average readiness is "
-                f"{average_score}%, with {strongest.agent_name or strongest.agent_id} "
-                "seeing the strongest signal."
-            ),
-            main_disagreements=[
-                f"{scorecard.agent_name or scorecard.agent_id} scored it {scorecard.overall_score}%."
-                for scorecard in weakest
-            ],
-            council_votes=[
-                CouncilVote(
-                    agent_id=scorecard.agent_id,
-                    stance=self._score_to_stance(scorecard.overall_score),
-                    must_fix_before_shortlist=[
-                        item.title for item in scorecard.red_flags[:2]
-                    ],
-                    top_strength_to_preserve=(
-                        scorecard.strengths[0].title if scorecard.strengths else ""
-                    ),
-                )
-                for scorecard in scorecards
-            ],
-            must_fix_now=self._collect_feedback(scorecards, "red_flags")[:4],
-            should_fix_next=self._collect_feedback(scorecards, "change_suggestions")[:4],
-            nice_to_have=self._collect_feedback(
-                scorecards,
-                "add_suggestions",
-                "formatting_improvements",
-            )[:4],
-            rewrite_strategy=[
-                "Prioritize the highest-risk gaps called out by the lowest-scoring agents.",
-                "Preserve strong proof points while making role fit and impact more explicit.",
-                "Keep the rewrite ATS-friendly and avoid invented metrics or experience.",
-            ],
-            agent_priority_order=[
-                scorecard.agent_id
-                for scorecard in sorted(
-                    scorecards,
-                    key=lambda item: item.overall_score,
-                )
-            ],
-            final_council_note=(
-                "Fast council summary generated from live agent scorecards for a responsive UI."
-            ),
-        )
-
-    @staticmethod
-    def _collect_feedback(
-        scorecards: list[AgentScorecard], *field_names: str
-    ) -> list[FeedbackItem]:
-        items: list[FeedbackItem] = []
-        priority_order = {"high": 0, "medium": 1, "low": 2}
-        seen: set[str] = set()
-        for scorecard in scorecards:
-            for field_name in field_names:
-                for item in getattr(scorecard, field_name):
-                    key = f"{item.title}|{item.recommendation}"
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    items.append(item)
-        return sorted(items, key=lambda item: priority_order[item.priority])
-
-    @staticmethod
-    def _first_action_item(scorecard: AgentScorecard) -> str:
-        for group in (
-            scorecard.red_flags,
-            scorecard.change_suggestions,
-            scorecard.add_suggestions,
-            scorecard.formatting_improvements,
-        ):
-            if group:
-                return group[0].recommendation
-        return "Keep the strongest evidence and make the target-role fit explicit."
-
-    @staticmethod
-    def _score_to_stance(score: int) -> str:
-        if score >= 80:
-            return "strong_accept"
-        if score >= 65:
-            return "accept"
-        if score >= 45:
-            return "mixed"
-        return "reject"
-
-    @staticmethod
-    def _build_ats_notes(scorecards: list[AgentScorecard]) -> list[str]:
-        keywords: list[str] = []
-        for scorecard in scorecards:
-            keywords.extend(scorecard.ats_keywords_to_add)
-        unique_keywords = list(dict.fromkeys(keyword for keyword in keywords if keyword))
-        if unique_keywords:
-            return [f"Consider adding verified keywords: {', '.join(unique_keywords[:12])}."]
-        return ["Use clear section headings, plain bullets, and role-specific keywords."]
-
-    @staticmethod
-    def _build_draft_note(
-        context: ResumeContext, prioritized_feedback: list[FeedbackItem]
-    ) -> str:
-        target = context.target_role or "the target role"
-        actions = "\n".join(
-            f"- {item.recommendation}" for item in prioritized_feedback[:5]
-        )
-        return (
-            f"Fast draft guidance for {target}:\n"
-            f"{actions or '- Preserve the original facts and sharpen impact bullets.'}\n\n"
-            "Original resume text is preserved for now; a full rewritten resume draft can "
-            "run as a separate slower export step."
-        )
-
     def run(
         self, context: ResumeContext, agent_ids: list[str] | None = None
     ) -> ArenaResult:
@@ -440,51 +267,25 @@ class ResumeRoastArena:
             len(context.job_description),
         )
         if agent_ids:
-            orchestration_plan = OrchestrationPlan(
-                selected_agent_ids=agent_ids,
-                run_debate=context.mode == "combat" and len(agent_ids) > 1,
-                council_focus=[
-                    "Resolve the highest-priority resume risks from the requested agents."
-                ],
-                synthesis_focus=[
-                    "Convert agent feedback into practical, ATS-friendly resume improvements."
-                ],
-                risk_controls=[
-                    "Do not invent experience, metrics, employers, dates, or education."
-                ],
-                reasoning=(
-                    "Requested agent IDs were supplied by the caller, so the "
-                    "orchestrator LLM pass was skipped to reduce latency."
-                ),
-            )
+            result = self.run_agent_only(context, agent_ids)
             logger.info(
-                "Orchestrator skipped because caller supplied agent_ids. selected_agents=%s run_debate=%s",
-                orchestration_plan.selected_agent_ids,
-                orchestration_plan.run_debate,
-            )
-        else:
-            orchestration_plan = self.orchestrator.plan(context)
-        scorecards = self.review_with_agents(
-            context, agent_ids=orchestration_plan.selected_agent_ids
-        )
-        if agent_ids:
-            result = self.assemble_from_agent_reviews(
-                context,
-                scorecards,
-                orchestration_plan,
-            )
-            logger.info(
-                "Arena run completed through fast requested-agent path. elapsed_ms=%s",
+                "Arena direct agent-only run completed. elapsed_ms=%s",
                 round((perf_counter() - started_at) * 1000),
             )
             return result
 
+        orchestration_plan = self._get_orchestrator().plan(
+            context, requested_agent_ids=agent_ids
+        )
+        scorecards = self.review_with_agents(
+            context, agent_ids=orchestration_plan.selected_agent_ids
+        )
         debate = (
             self.debate(context, scorecards)
             if orchestration_plan.run_debate
             else []
         )
-        council_decision = self.council.deliberate(
+        council_decision = self._get_council().deliberate(
             context,
             scorecards,
             debate,
@@ -502,3 +303,195 @@ class ResumeRoastArena:
             round((perf_counter() - started_at) * 1000),
         )
         return result
+
+    def run_agent_only(
+        self, context: ResumeContext, agent_ids: list[str]
+    ) -> ArenaResult:
+        """Run each selected persona once and merge their scorecards without extra LLM calls."""
+        orchestration_plan = OrchestrationPlan(
+            selected_agent_ids=agent_ids,
+            run_debate=False,
+            council_focus=[
+                "Direct UI roast path: each requested persona reviewed the full resume once.",
+            ],
+            synthesis_focus=[
+                "Use persona scorecards directly; ask the user for missing metrics before rewriting claims.",
+            ],
+            risk_controls=[
+                "Do not infer metrics, dates, scope, users, latency, revenue, or impact not present in agent evidence.",
+            ],
+            reasoning=(
+                "The UI requested explicit agents, so the backend skipped orchestrator, "
+                "debate, council, and synthesizer LLM calls."
+            ),
+        )
+        scorecards = self.review_with_agents(context, agent_ids=agent_ids)
+        red_flags = self._collect_feedback(scorecards, "red_flags", limit=10)
+        prioritized_feedback = self._prioritized_feedback(scorecards, limit=12)
+        council_decision = self._deterministic_council_decision(scorecards)
+        debate = self._synthetic_debate_turns(scorecards)
+        return ArenaResult(
+            mode=context.mode,
+            orchestration_plan=orchestration_plan,
+            scorecards=scorecards,
+            debate=debate,
+            council_decision=council_decision,
+            prioritized_feedback=prioritized_feedback,
+            red_flags=red_flags,
+            final_resume_draft=self._draft_from_agent_bullets(scorecards),
+            ats_friendly_version_notes=self._ats_notes(scorecards),
+            reasons_behind_changes=[
+                "Built from one full-resume review call per selected persona agent.",
+                "No extra LLM synthesis was used in this UI path.",
+                "Copilot edit agent should ask the user for missing proof before applying quantified claims.",
+            ],
+        )
+
+    @staticmethod
+    def _collect_feedback(
+        scorecards: list[AgentScorecard], field_name: str, limit: int
+    ) -> list[FeedbackItem]:
+        items: list[FeedbackItem] = []
+        seen: set[str] = set()
+        for scorecard in scorecards:
+            for item in getattr(scorecard, field_name):
+                key = item.title.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                items.append(item)
+                if len(items) >= limit:
+                    return items
+        return items
+
+    @classmethod
+    def _prioritized_feedback(
+        cls, scorecards: list[AgentScorecard], limit: int
+    ) -> list[FeedbackItem]:
+        fields = [
+            "red_flags",
+            "change_suggestions",
+            "add_suggestions",
+            "formatting_improvements",
+            "remove_suggestions",
+        ]
+        priority_rank = {"high": 0, "medium": 1, "low": 2}
+        items: list[FeedbackItem] = []
+        seen: set[str] = set()
+        for field in fields:
+            for item in cls._collect_feedback(scorecards, field, limit=100):
+                key = item.title.lower()
+                if key not in seen:
+                    seen.add(key)
+                    items.append(item)
+        return sorted(items, key=lambda item: priority_rank[item.priority])[:limit]
+
+    @staticmethod
+    def _deterministic_council_decision(
+        scorecards: list[AgentScorecard],
+    ) -> CouncilDecision:
+        if not scorecards:
+            score = 0
+        else:
+            score = round(
+                sum(scorecard.overall_score for scorecard in scorecards)
+                / len(scorecards)
+            )
+        if score >= 80:
+            verdict = "strong_resume"
+        elif score >= 60:
+            verdict = "promising_needs_polish"
+        elif score >= 40:
+            verdict = "not_targeted_enough"
+        else:
+            verdict = "needs_major_revision"
+        votes = [
+            CouncilVote(
+                agent_id=scorecard.agent_id,
+                stance=(
+                    "accept"
+                    if scorecard.overall_score >= 70
+                    else "mixed"
+                    if scorecard.overall_score >= 45
+                    else "reject"
+                ),
+                must_fix_before_shortlist=[
+                    item.title for item in scorecard.red_flags[:3]
+                ],
+                top_strength_to_preserve=(
+                    scorecard.strengths[0].title if scorecard.strengths else ""
+                ),
+            )
+            for scorecard in scorecards
+        ]
+        return CouncilDecision(
+            council_verdict=verdict,
+            shortlist_readiness_score=score,
+            consensus_summary=(
+                "Direct persona review complete. Scores and edit queue are built "
+                "from one full-resume LLM call per selected agent."
+            ),
+            main_disagreements=[],
+            council_votes=votes,
+            must_fix_now=[],
+            should_fix_next=[],
+            nice_to_have=[],
+            rewrite_strategy=[
+                "Use the agent scorecards as source feedback.",
+                "Ask the user for exact numbers before rewriting quantified claims.",
+                "Keep ATS, recruiter, and hiring-manager suggestions visible in the edit queue.",
+            ],
+            agent_priority_order=[scorecard.agent_id for scorecard in scorecards],
+            final_council_note=(
+                "This is a deterministic merge of persona outputs, not an extra council LLM call."
+            ),
+        )
+
+    @staticmethod
+    def _synthetic_debate_turns(scorecards: list[AgentScorecard]) -> list[DebateTurn]:
+        return [
+            DebateTurn(
+                speaker_agent_id=scorecard.agent_id,
+                message=scorecard.roast_line or scorecard.verdict,
+                agrees_with=[],
+                challenges=[],
+                action_item=(
+                    scorecard.change_suggestions[0].recommendation
+                    if scorecard.change_suggestions
+                    else scorecard.verdict
+                ),
+            )
+            for scorecard in scorecards
+        ]
+
+    @staticmethod
+    def _draft_from_agent_bullets(scorecards: list[AgentScorecard]) -> str:
+        bullets = [
+            bullet
+            for scorecard in scorecards
+            for bullet in scorecard.bullet_rewrites
+        ]
+        if not bullets:
+            return (
+                "Resume draft pending. Use the Copilot edit queue to gather missing "
+                "metrics and apply verified agent recommendations."
+            )
+        return "\n".join(f"- {bullet}" for bullet in bullets[:12])
+
+    @staticmethod
+    def _ats_notes(scorecards: list[AgentScorecard]) -> list[str]:
+        keywords = []
+        for scorecard in scorecards:
+            keywords.extend(scorecard.ats_keywords_to_add)
+        unique_keywords = []
+        seen = set()
+        for keyword in keywords:
+            key = keyword.lower()
+            if key not in seen:
+                seen.add(key)
+                unique_keywords.append(keyword)
+        return (
+            [f"Consider adding verified keywords: {', '.join(unique_keywords[:12])}"]
+            if unique_keywords
+            else ["No additional ATS keywords were returned by the selected agents."]
+        )
