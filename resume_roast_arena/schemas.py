@@ -61,10 +61,67 @@ class DebateTurn(BaseModel):
     action_item: str
 
 
+class CouncilVote(BaseModel):
+    agent_id: str
+    stance: Literal["strong_accept", "accept", "mixed", "reject"]
+    must_fix_before_shortlist: list[str] = Field(default_factory=list)
+    top_strength_to_preserve: str = ""
+
+
+class OrchestrationPlan(BaseModel):
+    selected_agent_ids: list[str] = Field(
+        default_factory=list,
+        description="Persona agent IDs the orchestrator wants to run for this review.",
+    )
+    run_debate: bool = Field(
+        default=True,
+        description="Whether a debate pass is useful before council adjudication.",
+    )
+    council_focus: list[str] = Field(
+        default_factory=list,
+        description="Issues the council should explicitly adjudicate.",
+    )
+    synthesis_focus: list[str] = Field(
+        default_factory=list,
+        description="Issues the final synthesizer should emphasize in the rewrite.",
+    )
+    risk_controls: list[str] = Field(
+        default_factory=list,
+        description="Guardrails to prevent fabricated or over-optimized resume changes.",
+    )
+    reasoning: str = Field(
+        description="Concise explanation for the orchestration choices."
+    )
+
+
+class CouncilDecision(BaseModel):
+    council_verdict: Literal[
+        "strong_resume",
+        "promising_needs_polish",
+        "needs_major_revision",
+        "not_targeted_enough",
+    ]
+    shortlist_readiness_score: int = Field(ge=0, le=100)
+    consensus_summary: str
+    main_disagreements: list[str] = Field(default_factory=list)
+    council_votes: list[CouncilVote] = Field(default_factory=list)
+    must_fix_now: list[FeedbackItem] = Field(default_factory=list)
+    should_fix_next: list[FeedbackItem] = Field(default_factory=list)
+    nice_to_have: list[FeedbackItem] = Field(default_factory=list)
+    rewrite_strategy: list[str] = Field(default_factory=list)
+    agent_priority_order: list[str] = Field(
+        default_factory=list,
+        description="Agent IDs ordered by whose feedback matters most for this target role.",
+    )
+    final_council_note: str
+
+
 class ArenaResult(BaseModel):
     mode: Mode = "combat"
+    orchestration_plan: OrchestrationPlan | None = None
     scorecards: list[AgentScorecard] = Field(default_factory=list)
     debate: list[DebateTurn] = Field(default_factory=list)
+    council_decision: CouncilDecision | None = None
     prioritized_feedback: list[FeedbackItem] = Field(default_factory=list)
     red_flags: list[FeedbackItem] = Field(default_factory=list)
     final_resume_draft: str = Field(

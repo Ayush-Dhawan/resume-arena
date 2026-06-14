@@ -4,9 +4,11 @@ import os
 from dataclasses import dataclass
 
 from dotenv import load_dotenv
+from langchain_openai import ChatOpenAI
 
 
 load_dotenv()
+load_dotenv(".env.example")
 
 
 @dataclass(frozen=True)
@@ -21,3 +23,13 @@ def require_openai_key() -> None:
         raise RuntimeError(
             "OPENAI_API_KEY is not set. Add it to your environment or .env file."
         )
+
+
+def build_chat_model(config: OpenAIConfig | None = None) -> ChatOpenAI:
+    require_openai_key()
+    config = config or OpenAIConfig()
+    return ChatOpenAI(
+        model=config.model,
+        temperature=config.temperature,
+        timeout=config.timeout,
+    )

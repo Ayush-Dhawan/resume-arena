@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
 from resume_roast_arena.agents import build_all_agents
-from resume_roast_arena.config import OpenAIConfig, require_openai_key
+from resume_roast_arena.config import OpenAIConfig, build_chat_model, require_openai_key
+from resume_roast_arena.council import LLMCouncil
+from resume_roast_arena.orchestrator import OrchestratorAgent
 from resume_roast_arena.prompts import DEBATE_SYSTEM_PROMPT, SYNTHESIS_SYSTEM_PROMPT
 from resume_roast_arena.schemas import (
     AgentScorecard,
     ArenaResult,
+    CouncilDecision,
     DebateTurn,
+    OrchestrationPlan,
     ResumeContext,
 )
 
@@ -61,6 +64,12 @@ Scorecards:
 
 Debate:
 {debate}
+
+Council decision:
+{council_decision}
+
+Orchestration plan:
+{orchestration_plan}
 """,
         ),
     ]
@@ -75,23 +84,28 @@ class ResumeRoastArena:
     def __init__(self, config: OpenAIConfig | None = None) -> None:
         require_openai_key()
         self.config = config or OpenAIConfig()
-        self.llm = ChatOpenAI(
-            model=self.config.model,
-            temperature=self.config.temperature,
-            timeout=self.config.timeout,
-        )
+        self.llm = build_chat_model(self.config)
         self.debate_chain = DEBATE_PROMPT | self.llm.with_structured_output(DebateTurns)
         self.synthesis_chain = SYNTHESIS_PROMPT | self.llm.with_structured_output(
             ArenaResult
         )
+        self.orchestrator = OrchestratorAgent(self.config)
+        self.council = LLMCouncil(self.config)
 
     def review_with_agents(
         self, context: ResumeContext, agent_ids: list[str] | None = None
     ) -> list[AgentScorecard]:
         agents = build_all_agents(self.config)
         if agent_ids:
-            requested = set(agent_ids)
-            agents = [agent for agent in agents if agent.spec.agent_id in requested]
+            agents_by_id = {agent.spec.agent_id: agent for agent in agents}
+            missing = [agent_id for agent_id in agent_ids if agent_id not in agents_by_id]
+            if missing:
+                available = ", ".join(agents_by_id)
+                raise ValueError(
+                    f"Unknown agent(s): {', '.join(missing)}. "
+                    f"Available agents: {available}"
+                )
+            agents = [agents_by_id[agent_id] for agent_id in agent_ids]
         return [agent.review(context) for agent in agents]
 
     def debate(
@@ -114,6 +128,8 @@ class ResumeRoastArena:
         context: ResumeContext,
         scorecards: list[AgentScorecard],
         debate: list[DebateTurn] | None = None,
+        council_decision: CouncilDecision | None = None,
+        orchestration_plan: OrchestrationPlan | None = None,
     ) -> ArenaResult:
         debate = debate or []
         result = self.synthesis_chain.invoke(
@@ -127,16 +143,45 @@ class ResumeRoastArena:
                 "job_description": context.job_description or "Not provided",
                 "scorecards": [scorecard.model_dump() for scorecard in scorecards],
                 "debate": [turn.model_dump() for turn in debate],
+                "council_decision": (
+                    council_decision.model_dump() if council_decision else {}
+                ),
+                "orchestration_plan": (
+                    orchestration_plan.model_dump() if orchestration_plan else {}
+                ),
             }
         )
         result.mode = context.mode
+        result.orchestration_plan = orchestration_plan
         result.scorecards = scorecards
         result.debate = debate
+        result.council_decision = council_decision
         return result
 
     def run(
         self, context: ResumeContext, agent_ids: list[str] | None = None
     ) -> ArenaResult:
-        scorecards = self.review_with_agents(context, agent_ids=agent_ids)
-        debate = self.debate(context, scorecards)
-        return self.synthesize(context, scorecards, debate)
+        orchestration_plan = self.orchestrator.plan(
+            context, requested_agent_ids=agent_ids
+        )
+        scorecards = self.review_with_agents(
+            context, agent_ids=orchestration_plan.selected_agent_ids
+        )
+        debate = (
+            self.debate(context, scorecards)
+            if orchestration_plan.run_debate
+            else []
+        )
+        council_decision = self.council.deliberate(
+            context,
+            scorecards,
+            debate,
+            orchestration_plan=orchestration_plan,
+        )
+        return self.synthesize(
+            context,
+            scorecards,
+            debate,
+            council_decision,
+            orchestration_plan=orchestration_plan,
+        )

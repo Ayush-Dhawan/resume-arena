@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 
-from resume_roast_arena.config import OpenAIConfig, require_openai_key
+from resume_roast_arena.config import OpenAIConfig, build_chat_model, require_openai_key
 from resume_roast_arena.prompts import AGENT_SPECS, AgentSpec
 from resume_roast_arena.schemas import AgentScorecard, ResumeContext
 
@@ -38,11 +37,7 @@ class ResumeAgent:
         require_openai_key()
         self.spec = spec
         self.config = config or OpenAIConfig()
-        self.llm = ChatOpenAI(
-            model=self.config.model,
-            temperature=self.config.temperature,
-            timeout=self.config.timeout,
-        )
+        self.llm = build_chat_model(self.config)
         self.chain = REVIEW_PROMPT | self.llm.with_structured_output(AgentScorecard)
 
     def review(self, context: ResumeContext) -> AgentScorecard:
