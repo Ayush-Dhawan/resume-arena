@@ -27,6 +27,13 @@ build/
 dist/
 *.egg-info/
 
+# Web app dependencies and build output
+web/node_modules/
+web/.next/
+web/out/
+web/.vercel/
+web/next-env.d.ts
+
 # IDE/editor
 .idea/
 .vscode/

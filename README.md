@@ -1,10 +1,15 @@
 # Resume Roast Arena
 
-MVP agent layer for a roast-style resume improvement app.
+MVP for a roast-style resume improvement app.
 
-This repo currently contains reusable LangChain + OpenAI agents only. UI, upload parsing, auth, persistence, and LaTeX resume generation are intentionally left out.
+This repo contains:
+
+- `resume_roast_arena/`: reusable LangChain + OpenAI agents.
+- `web/`: Next.js UI with resume upload and parsing for PDF, DOCX, LaTeX, TXT, Markdown, and RTF.
 
 ## Setup
+
+### Agent Backend
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -16,6 +21,16 @@ Add your key to `.env`:
 ```text
 OPENAI_API_KEY=sk-your-key-here
 ```
+
+### Web App
+
+```powershell
+cd web
+npm install
+npm run dev
+```
+
+The web app runs at `http://localhost:3000` by default.
 
 ## Run One Agent
 
@@ -42,4 +57,4 @@ Use `--mode bts` when you want direct analysis without debate-style lines.
 
 ## Output
 
-The CLI prints JSON with scorecards, red flags, add/remove/change suggestions, ATS notes, debate lines, and a final prioritized action plan. A future LaTeX/MCP integration can consume this JSON to produce the final resume file.
+The CLI prints JSON with scorecards, red flags, add/remove/change suggestions, ATS notes, debate lines, and a final prioritized action plan. The web app currently prepares parsed resume text and metadata for the future agent backend integration.
