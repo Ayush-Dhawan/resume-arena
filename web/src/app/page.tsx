@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type Agent = {
+  backendId: string;
   name: string;
   role: string;
   color: string;
@@ -15,8 +16,10 @@ type Agent = {
 
 type DebateLine = {
   speaker: string;
+  speakerId: string;
   time: string;
   text: string;
+  actionItem?: string;
 };
 
 type ParsedResume = {
@@ -50,92 +53,169 @@ type MiniResumeSection = {
   lines: string[];
 };
 
+type FeedbackItem = {
+  title: string;
+  evidence: string;
+  recommendation: string;
+  priority: "high" | "medium" | "low";
+};
+
+type AgentScorecard = {
+  agent_id: string;
+  agent_name: string;
+  overall_score: number;
+  role_fit_score: number;
+  clarity_score: number;
+  ats_score: number;
+  impact_score: number;
+  verdict: string;
+  roast_line: string;
+  strengths: FeedbackItem[];
+  red_flags: FeedbackItem[];
+  add_suggestions: FeedbackItem[];
+  remove_suggestions: FeedbackItem[];
+  change_suggestions: FeedbackItem[];
+  formatting_improvements: FeedbackItem[];
+  ats_keywords_to_add: string[];
+  bullet_rewrites: string[];
+  reasoning: string;
+};
+
+type BackendDebateTurn = {
+  speaker_agent_id: string;
+  message: string;
+  agrees_with: string[];
+  challenges: string[];
+  action_item: string;
+};
+
+type CouncilDecision = {
+  council_verdict: string;
+  shortlist_readiness_score: number;
+  consensus_summary: string;
+  main_disagreements: string[];
+  final_council_note: string;
+};
+
+type ArenaResult = {
+  mode: "bts" | "combat";
+  scorecards: AgentScorecard[];
+  debate: BackendDebateTurn[];
+  council_decision: CouncilDecision | null;
+  prioritized_feedback: FeedbackItem[];
+  red_flags: FeedbackItem[];
+  final_resume_draft: string;
+  ats_friendly_version_notes: string[];
+  reasons_behind_changes: string[];
+};
+
 const agents: Agent[] = [
   {
+    backendId: "recruiter",
     name: "Recruiter",
     role: "Signal Hunter",
     color: "#ffd84a",
     score: 68,
     seat: "left-[12%] top-[33%]",
-    note: "Good potential. A few things to tighten up.",
+    note: "Waiting for the first-screen verdict.",
     spriteColumn: 0,
     depth: "back",
   },
   {
+    backendId: "ats",
     name: "ATS Bot",
     role: "Parser Unit",
     color: "#42e8e0",
     score: 42,
     seat: "right-[11%] top-[33%]",
-    note: "Parsing issues detected. Optimize for ATS.",
+    note: "Ready to scan formatting and keywords.",
     spriteColumn: 1,
     depth: "back",
   },
   {
+    backendId: "startup_founder",
     name: "Founder",
     role: "Impact Judge",
     color: "#57e574",
     score: 71,
     seat: "left-[7%] bottom-[8%]",
-    note: "I like the initiative. Show more impact.",
+    note: "Hunting for ownership and leverage.",
     spriteColumn: 2,
     depth: "front",
   },
   {
+    backendId: "hiring_manager",
     name: "Hiring Manager",
     role: "Outcome Ref",
     color: "#ffc941",
     score: 63,
     seat: "left-1/2 bottom-[3%] -translate-x-1/2",
-    note: "Solid experience. Needs clearer outcomes.",
+    note: "Checking depth, scope, and job fit.",
     spriteColumn: 3,
     depth: "center",
   },
   {
+    backendId: "brutally_honest_friend",
     name: "Honest Friend",
     role: "Vibe Check",
     color: "#bf67ff",
     score: 55,
     seat: "right-[5%] bottom-[8%]",
-    note: "Feels generic in places. Spice it up.",
+    note: "Prepared to roast vague phrasing.",
     spriteColumn: 4,
     depth: "front",
   },
+  {
+    backendId: "morale_friend",
+    name: "Morale Friend",
+    role: "Strength Spotter",
+    color: "#ff8fc7",
+    score: 74,
+    seat: "right-[-7%] top-[38%] scale-[0.55]",
+    note: "Protecting the good parts while improving the rest.",
+    spriteColumn: 4,
+    depth: "back",
+  },
 ];
 
-const debateLines: DebateLine[] = [
+const staticDebateLines: DebateLine[] = [
   {
     speaker: "Honest Friend",
-    time: "10:23:45",
-    text: "I am just saying, responsible for shows up four times. That is resume filler 101. Hit us with more impact.",
+    speakerId: "brutally_honest_friend",
+    time: "Ready",
+    text: "Upload a resume and start a new roast. Then the real agents take over this transcript.",
   },
   {
     speaker: "ATS Bot",
-    time: "10:23:21",
-    text: "I found section header drift. Consider standard formatting for better parsing.",
+    speakerId: "ats",
+    time: "Queued",
+    text: "I will scan section names, formatting risk, and keyword coverage once the bell rings.",
   },
   {
     speaker: "Recruiter",
-    time: "10:22:58",
-    text: "Your experience is relevant, but the summary could be sharper and more role-specific.",
+    speakerId: "recruiter",
+    time: "Queued",
+    text: "I will judge whether this resume survives a fast human screen.",
   },
   {
     speaker: "Hiring Manager",
-    time: "10:22:32",
-    text: "Quantify the results in your last two roles. That would strengthen your case.",
+    speakerId: "hiring_manager",
+    time: "Queued",
+    text: "I will look for evidence that the candidate can actually do the target job.",
   },
   {
-    speaker: "Founder",
-    time: "10:22:10",
-    text: "You have potential. Highlight product thinking and ownership more clearly.",
+    speaker: "Morale Friend",
+    speakerId: "morale_friend",
+    time: "Queued",
+    text: "I will preserve the strongest signals so the roast improves the resume without flattening it.",
   },
 ];
 
-const redFlags = [
-  "No quantifiable achievements",
-  "Weak action verbs",
-  "Skills section not optimized",
-  "Education takes up too much space",
+const defaultRedFlags = [
+  "No live roast yet",
+  "Upload resume first",
+  "Click New Roast",
+  "Agents will replace these notes",
 ];
 
 const spriteX = ["0%", "25%", "50%", "75%", "100%"];
@@ -167,19 +247,19 @@ function AgentSprite({
       }
       data-sprite-supported="true"
       aria-label={`${agent.name} avatar`}
-      title="Sprite sheet loaded from /public/agent-action-sprites.png."
+      title={`${agent.name}: ${agent.role}`}
     />
   );
 }
 
-function ArenaAgent({ agent, active }: { agent: Agent; active: boolean }) {
+function ArenaAgent({ agent, active, roasting }: { agent: Agent; active: boolean; roasting: boolean }) {
   return (
-    <div className={`agent-seat agent-${agent.depth} absolute ${agent.seat} ${active ? "active" : ""}`}>
+    <div className={`agent-seat agent-${agent.depth} absolute ${agent.seat} ${active ? "active" : ""} ${roasting ? "is-thinking" : ""}`}>
       <div className="agent-label" style={{ color: agent.color }}>
         {agent.name}
       </div>
       <div className="chair">
-        <AgentSprite agent={agent} action={active ? "speak" : "idle"} />
+        <AgentSprite agent={agent} action={active ? "speak" : roasting ? "work" : "idle"} />
       </div>
     </div>
   );
@@ -188,26 +268,70 @@ function ArenaAgent({ agent, active }: { agent: Agent; active: boolean }) {
 export default function Home() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [parsedResume, setParsedResume] = useState<ParsedResume | null>(null);
+  const [arenaResult, setArenaResult] = useState<ArenaResult | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [roastError, setRoastError] = useState<string | null>(null);
   const [isParsing, setIsParsing] = useState(false);
+  const [isRoasting, setIsRoasting] = useState(false);
+  const [targetRole, setTargetRole] = useState("Product Manager");
+  const [targetCompany, setTargetCompany] = useState("");
+  const [experienceLevel, setExperienceLevel] = useState("mid");
+  const [jobDescription, setJobDescription] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const activeLine = debateLines[activeIndex % debateLines.length];
+
+  const scorecardByAgentId = useMemo(() => {
+    return new Map(arenaResult?.scorecards.map((scorecard) => [scorecard.agent_id, scorecard]) ?? []);
+  }, [arenaResult]);
+
+  const displayAgents = useMemo(() => {
+    return agents.map((agent) => {
+      const scorecard = scorecardByAgentId.get(agent.backendId);
+      return {
+        ...agent,
+        score: scorecard?.overall_score ?? agent.score,
+        note: scorecard?.roast_line ?? scorecard?.verdict ?? agent.note,
+      };
+    });
+  }, [scorecardByAgentId]);
+
+  const liveDebateLines = useMemo(() => {
+    if (!arenaResult?.debate.length) {
+      return staticDebateLines;
+    }
+
+    return arenaResult.debate.map((turn, index) => {
+      const agent = agents.find((item) => item.backendId === turn.speaker_agent_id);
+      return {
+        speaker: agent?.name ?? turn.speaker_agent_id,
+        speakerId: turn.speaker_agent_id,
+        time: `Turn ${index + 1}`,
+        text: turn.message,
+        actionItem: turn.action_item,
+      };
+    });
+  }, [arenaResult]);
+
+  const activeLine = liveDebateLines[activeIndex % liveDebateLines.length];
   const activeAgent = useMemo(
-    () => agents.find((agent) => agent.name === activeLine.speaker) ?? agents[0],
-    [activeLine],
+    () => displayAgents.find((agent) => agent.backendId === activeLine.speakerId) ?? displayAgents[0],
+    [activeLine.speakerId, displayAgents],
   );
+  const redFlags = arenaResult?.red_flags.map((flag) => flag.title) ?? defaultRedFlags;
+  const councilScore = arenaResult?.council_decision?.shortlist_readiness_score;
 
   useEffect(() => {
     const id = window.setInterval(() => {
-      setActiveIndex((index) => (index + 1) % debateLines.length);
-    }, 3600);
+      setActiveIndex((index) => (index + 1) % liveDebateLines.length);
+    }, arenaResult ? 5200 : 3600);
 
     return () => window.clearInterval(id);
-  }, []);
+  }, [arenaResult, liveDebateLines.length]);
 
   async function parseResume(file: File) {
     setIsParsing(true);
     setUploadError(null);
+    setRoastError(null);
+    setArenaResult(null);
 
     const formData = new FormData();
     formData.append("resume", file);
@@ -229,6 +353,47 @@ export default function Home() {
       setUploadError(error instanceof Error ? error.message : "Could not parse resume.");
     } finally {
       setIsParsing(false);
+    }
+  }
+
+  async function runRoast() {
+    if (!parsedResume || isRoasting) {
+      return;
+    }
+
+    setIsRoasting(true);
+    setRoastError(null);
+    setArenaResult(null);
+    setActiveIndex(0);
+
+    try {
+      const response = await fetch("/api/roast", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          resumeText: parsedResume.text,
+          jobDescription,
+          targetRole,
+          targetCompany,
+          experienceLevel,
+          preferredTone: "confident, direct, ATS-friendly, witty but useful",
+          mode: "combat",
+          agentIds: agents.map((agent) => agent.backendId),
+        }),
+      });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "The arena could not finish this roast.");
+      }
+
+      setArenaResult(payload.result);
+    } catch (error) {
+      setRoastError(error instanceof Error ? error.message : "The arena could not finish this roast.");
+    } finally {
+      setIsRoasting(false);
     }
   }
 
@@ -259,7 +424,9 @@ export default function Home() {
             <button className="icon-button" aria-label="Help">
               ?
             </button>
-            <button className="new-roast-button">New Roast</button>
+            <button className="new-roast-button" disabled={!parsedResume || isParsing || isRoasting} onClick={() => void runRoast()}>
+              {isRoasting ? "Roasting..." : "New Roast"}
+            </button>
           </div>
         </header>
 
@@ -346,49 +513,61 @@ export default function Home() {
               <h2 className="section-title">Target Role</h2>
               <label>
                 <span>What role are you targeting?</span>
-                <input defaultValue="Product Manager" />
+                <input value={targetRole} onChange={(event) => setTargetRole(event.target.value)} />
               </label>
-              <small>e.g. Product Manager, Data Scientist, Software Engineer</small>
+            </section>
+
+            <section className="form-block">
+              <h2 className="section-title">Company</h2>
+              <label>
+                <span>Optional target company</span>
+                <input value={targetCompany} onChange={(event) => setTargetCompany(event.target.value)} placeholder="e.g. OpenAI" />
+              </label>
             </section>
 
             <section className="form-block">
               <h2 className="section-title">Experience Level</h2>
-              <select defaultValue="mid">
+              <select value={experienceLevel} onChange={(event) => setExperienceLevel(event.target.value)}>
+                <option value="entry">Entry-level</option>
                 <option value="mid">Mid-level (3-7 years)</option>
-                <option>Entry-level</option>
-                <option>Senior</option>
+                <option value="senior">Senior</option>
               </select>
             </section>
 
             <section className="form-block">
-              <h2 className="section-title">Industry (Optional)</h2>
-              <select defaultValue="technology">
-                <option value="technology">Technology</option>
-                <option>Finance</option>
-                <option>Healthcare</option>
-              </select>
+              <h2 className="section-title">Job Description</h2>
+              <label>
+                <span>Optional JD or role notes</span>
+                <textarea
+                  value={jobDescription}
+                  onChange={(event) => setJobDescription(event.target.value)}
+                  placeholder="Paste the JD for sharper agent debate."
+                />
+              </label>
             </section>
 
-            <button className="enter-button" disabled={!parsedResume || isParsing}>
-              Enter Arena <span>x</span>
+            {roastError ? <p className="roast-error">{roastError}</p> : null}
+
+            <button className="enter-button" disabled={!parsedResume || isParsing || isRoasting} onClick={() => void runRoast()}>
+              {isRoasting ? "Agents Roasting..." : "Enter Arena"} <span>x</span>
             </button>
 
             <div className="pro-tip mt-auto">
-              <strong>Pro Tip</strong>
-              <p>Be brave. These agents do not hold back.</p>
+              <strong>{arenaResult ? "Council Verdict" : "Pro Tip"}</strong>
+              <p>{arenaResult?.council_decision?.consensus_summary ?? "Be brave. These agents do not hold back."}</p>
             </div>
           </aside>
 
           <section className="panel overflow-hidden">
-            <div className="arena relative min-h-[620px]">
+            <div className={`arena relative min-h-[620px] ${isRoasting ? "is-roasting" : ""} ${arenaResult ? "has-result" : ""}`}>
               <div className="crowd" />
               <div className="banners">
                 <span />
                 <span />
               </div>
               <div className="round-banner">
-                <span>Round 1</span>
-                <strong>Let The Roast Begin</strong>
+                <span>{isRoasting ? "Agents Thinking" : arenaResult ? "Council Complete" : "Round 1"}</span>
+                <strong>{isRoasting ? "Roast In Progress" : arenaResult ? "Verdict Is In" : "Let The Roast Begin"}</strong>
               </div>
               <div className="arena-ring" />
               <div className="resume-hologram">
@@ -424,8 +603,16 @@ export default function Home() {
               </div>
               <div className="platform-glow" />
               <div className="ats-beam" />
-              {agents.map((agent) => (
-                <ArenaAgent key={agent.name} agent={agent} active={agent.name === activeAgent.name} />
+              <div className="roast-status">
+                <span>{isRoasting ? "Live agent calls running" : arenaResult ? `Shortlist readiness ${councilScore ?? "--"}%` : "Awaiting resume"}</span>
+              </div>
+              {displayAgents.map((agent) => (
+                <ArenaAgent
+                  key={agent.backendId}
+                  agent={agent}
+                  active={agent.backendId === activeAgent.backendId}
+                  roasting={isRoasting}
+                />
               ))}
             </div>
 
@@ -443,14 +630,14 @@ export default function Home() {
                 <p>{activeLine.text}</p>
               </div>
               <div className="transcript">
-                {debateLines.map((line) => {
-                  const agent = agents.find((item) => item.name === line.speaker) ?? agents[0];
-                  const active = line.speaker === activeLine.speaker;
+                {liveDebateLines.map((line, index) => {
+                  const agent = displayAgents.find((item) => item.backendId === line.speakerId) ?? displayAgents[0];
+                  const active = index === activeIndex % liveDebateLines.length;
                   return (
-                    <div className={`transcript-row ${active ? "is-active" : ""}`} key={line.time}>
+                    <div className={`transcript-row ${active ? "is-active" : ""}`} key={`${line.speakerId}-${index}`}>
                       <AgentSprite agent={agent} compact />
                       <strong style={{ color: agent.color }}>{line.speaker}</strong>
-                      <span>{line.text}</span>
+                      <span title={line.actionItem}>{line.actionItem ? `${line.text} Action: ${line.actionItem}` : line.text}</span>
                       <time>{line.time}</time>
                     </div>
                   );
@@ -462,9 +649,9 @@ export default function Home() {
           <aside className="panel p-4">
             <h2 className="section-title text-[#ff5448]">Agent Scores</h2>
             <div className="mt-4 flex flex-col gap-3">
-              {agents.map((agent) => (
-                <article className="score-card" key={agent.name}>
-                  <AgentSprite agent={agent} action="work" />
+              {displayAgents.map((agent) => (
+                <article className={`score-card ${scorecardByAgentId.has(agent.backendId) ? "has-live-score" : ""}`} key={agent.backendId}>
+                  <AgentSprite agent={agent} action={isRoasting ? "work" : "idle"} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <strong style={{ color: agent.color }}>{agent.name}</strong>
@@ -488,7 +675,7 @@ export default function Home() {
                 <span className="flag-count">{redFlags.length}</span>
               </div>
               <ul>
-                {redFlags.map((flag) => (
+                {redFlags.slice(0, 6).map((flag) => (
                   <li key={flag}>
                     <span />
                     {flag}

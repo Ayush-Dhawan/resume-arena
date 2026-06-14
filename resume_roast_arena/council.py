@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+from time import perf_counter
+
 from langchain_core.prompts import ChatPromptTemplate
 
 from resume_roast_arena.config import OpenAIConfig, build_chat_model, require_openai_key
@@ -11,6 +14,9 @@ from resume_roast_arena.schemas import (
     OrchestrationPlan,
     ResumeContext,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 COUNCIL_PROMPT = ChatPromptTemplate.from_messages(
@@ -64,6 +70,13 @@ class LLMCouncil:
         debate: list[DebateTurn] | None = None,
         orchestration_plan: OrchestrationPlan | None = None,
     ) -> CouncilDecision:
+        started_at = perf_counter()
+        logger.info(
+            "Council deliberation started. scorecards=%s debate_turns=%s target_role=%s",
+            len(scorecards),
+            len(debate or []),
+            context.target_role or "Not specified",
+        )
         result = self.chain.invoke(
             {
                 "target_role": context.target_role or "Not specified",
@@ -79,5 +92,11 @@ class LLMCouncil:
                     orchestration_plan.model_dump() if orchestration_plan else {}
                 ),
             }
+        )
+        logger.info(
+            "Council deliberation completed. verdict=%s shortlist_score=%s elapsed_ms=%s",
+            result.council_verdict,
+            result.shortlist_readiness_score,
+            round((perf_counter() - started_at) * 1000),
         )
         return result

@@ -1,0 +1,46 @@
+Tanmay Singhania
+Mumbai, India | tanmay@example.com | +91 98765 43210
+LinkedIn: linkedin.com/in/tanmaysinghania | GitHub: github.com/tanmays
+
+SUMMARY
+Product-minded software engineer with 3 years of experience building web applications, internal tools, and analytics dashboards. Comfortable working across frontend, backend, APIs, and stakeholder communication. Looking to move into a Product Manager role focused on AI-enabled user experiences.
+
+EXPERIENCE
+Software Engineer, BrightCart Labs
+July 2022 - Present
+- Built a customer support dashboard used by 35 support agents to triage order issues and refunds.
+- Worked with operations and design teams to define dashboard filters, escalation workflows, and SLA alerts.
+- Improved page load time from 4.8 seconds to 1.9 seconds by optimizing API calls and caching frequent queries.
+- Created weekly product analytics reports tracking activation, retention, ticket volume, and refund reasons.
+- Led rollout of a self-serve refund rules tool that reduced engineering dependency for policy updates.
+
+Associate Software Developer, FinEdge Systems
+June 2020 - June 2022
+- Developed React components and REST API integrations for a loan application portal.
+- Partnered with QA and customer success teams to fix onboarding issues reported by branch users.
+- Automated manual CSV reconciliation tasks using Python scripts, saving roughly 6 hours per week.
+- Documented release notes and trained internal users on new workflow changes.
+
+PROJECTS
+Resume Roast Arena
+- Built a prototype AI resume review app with multiple persona agents including recruiter, ATS auditor, hiring manager, founder, and honest friend.
+- Implemented resume parsing for PDF, DOCX, LaTeX, TXT, and Markdown files.
+- Designed a pixel-art arena UI where agents debate resume feedback and display live scorecards.
+
+Customer Churn Explorer
+- Built a dashboard to segment customers by plan, usage, support volume, and renewal risk.
+- Added filters and cohort views that helped the team identify high-risk users before renewal.
+
+SKILLS
+Product: user interviews, requirements gathering, prioritization, metrics dashboards, release notes
+Technical: JavaScript, TypeScript, React, Next.js, Python, FastAPI, REST APIs, SQL, Git
+Analytics: funnel analysis, retention analysis, cohort analysis, dashboarding
+
+EDUCATION
+Bachelor of Science in Information Technology
+Mumbai University, 2020
+
+ACHIEVEMENTS
+- Presented internal demo of support dashboard to operations leadership.
+- Mentored two junior developers on frontend debugging and API integration.
+- Recognized by manager for translating vague business problems into clear engineering tasks.

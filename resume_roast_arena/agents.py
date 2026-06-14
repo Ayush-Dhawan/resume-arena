@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+from time import perf_counter
+
 from langchain_core.prompts import ChatPromptTemplate
 
 from resume_roast_arena.config import OpenAIConfig, build_chat_model, require_openai_key
@@ -32,6 +35,9 @@ Resume:
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 class ResumeAgent:
     def __init__(self, spec: AgentSpec, config: OpenAIConfig | None = None) -> None:
         require_openai_key()
@@ -41,6 +47,15 @@ class ResumeAgent:
         self.chain = REVIEW_PROMPT | self.llm.with_structured_output(AgentScorecard)
 
     def review(self, context: ResumeContext) -> AgentScorecard:
+        started_at = perf_counter()
+        logger.info(
+            "Agent review started. agent_id=%s target_role=%s resume_chars=%s jd_chars=%s mode=%s",
+            self.spec.agent_id,
+            context.target_role or "Not specified",
+            len(context.resume_text),
+            len(context.job_description),
+            context.mode,
+        )
         result = self.chain.invoke(
             {
                 "system_prompt": self.spec.system_prompt,
@@ -55,6 +70,12 @@ class ResumeAgent:
         )
         result.agent_id = self.spec.agent_id
         result.agent_name = self.spec.name
+        logger.info(
+            "Agent review completed. agent_id=%s score=%s elapsed_ms=%s",
+            self.spec.agent_id,
+            result.overall_score,
+            round((perf_counter() - started_at) * 1000),
+        )
         return result
 
 

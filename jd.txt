@@ -1,0 +1,28 @@
+Product Manager, AI Experience
+Acme AI Tools
+
+ABOUT THE ROLE
+Acme AI Tools is looking for a Product Manager to lead user-facing AI workflow features for small business teams. The PM will work with engineering, design, data, marketing, and customer success to discover user problems, define product requirements, launch features, and measure adoption.
+
+RESPONSIBILITIES
+- Own the roadmap for AI-assisted workflow features from discovery through launch.
+- Conduct user interviews and synthesize customer pain points into product opportunities.
+- Write clear product requirement documents, acceptance criteria, and release notes.
+- Partner with engineering and design to ship simple, reliable, and measurable user experiences.
+- Define success metrics for activation, retention, engagement, and feature adoption.
+- Analyze product usage data and customer feedback to prioritize improvements.
+- Communicate tradeoffs, launch plans, and results to leadership and cross-functional teams.
+
+REQUIREMENTS
+- 2+ years of experience in product management, product operations, software engineering, or a highly cross-functional technical role.
+- Strong understanding of web applications, APIs, analytics dashboards, and iterative product development.
+- Experience working with engineering teams and translating ambiguous problems into clear execution plans.
+- Comfort using data to make prioritization decisions.
+- Excellent written communication and stakeholder management skills.
+- Bonus: experience with AI products, internal tools, customer support workflows, or automation.
+
+WHAT WE VALUE
+- User empathy and practical judgment.
+- Strong ownership without needing perfect instructions.
+- Ability to balance speed, quality, and risk.
+- Clear thinking, concise communication, and measurable impact.

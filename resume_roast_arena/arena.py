@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import logging
+from time import perf_counter
+
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
 
@@ -16,6 +19,9 @@ from resume_roast_arena.schemas import (
     OrchestrationPlan,
     ResumeContext,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 DEBATE_PROMPT = ChatPromptTemplate.from_messages(
@@ -82,6 +88,7 @@ class DebateTurns(BaseModel):
 
 class ResumeRoastArena:
     def __init__(self, config: OpenAIConfig | None = None) -> None:
+        logger.info("Initializing ResumeRoastArena.")
         require_openai_key()
         self.config = config or OpenAIConfig()
         self.llm = build_chat_model(self.config)
@@ -95,6 +102,7 @@ class ResumeRoastArena:
     def review_with_agents(
         self, context: ResumeContext, agent_ids: list[str] | None = None
     ) -> list[AgentScorecard]:
+        started_at = perf_counter()
         agents = build_all_agents(self.config)
         if agent_ids:
             agents_by_id = {agent.spec.agent_id: agent for agent in agents}
@@ -106,13 +114,26 @@ class ResumeRoastArena:
                     f"Available agents: {available}"
                 )
             agents = [agents_by_id[agent_id] for agent_id in agent_ids]
-        return [agent.review(context) for agent in agents]
+        logger.info(
+            "Running persona reviews. agents=%s",
+            [agent.spec.agent_id for agent in agents],
+        )
+        scorecards = [agent.review(context) for agent in agents]
+        logger.info(
+            "Persona reviews completed. count=%s elapsed_ms=%s",
+            len(scorecards),
+            round((perf_counter() - started_at) * 1000),
+        )
+        return scorecards
 
     def debate(
         self, context: ResumeContext, scorecards: list[AgentScorecard]
     ) -> list[DebateTurn]:
         if context.mode == "bts":
+            logger.info("Debate skipped because mode=bts.")
             return []
+        started_at = perf_counter()
+        logger.info("Debate generation started. scorecards=%s", len(scorecards))
         result = self.debate_chain.invoke(
             {
                 "target_role": context.target_role or "Not specified",
@@ -120,6 +141,11 @@ class ResumeRoastArena:
                 "mode": context.mode,
                 "scorecards": [scorecard.model_dump() for scorecard in scorecards],
             }
+        )
+        logger.info(
+            "Debate generation completed. turns=%s elapsed_ms=%s",
+            len(result.turns),
+            round((perf_counter() - started_at) * 1000),
         )
         return result.turns
 
@@ -131,7 +157,14 @@ class ResumeRoastArena:
         council_decision: CouncilDecision | None = None,
         orchestration_plan: OrchestrationPlan | None = None,
     ) -> ArenaResult:
+        started_at = perf_counter()
         debate = debate or []
+        logger.info(
+            "Final synthesis started. scorecards=%s debate_turns=%s council_present=%s",
+            len(scorecards),
+            len(debate),
+            council_decision is not None,
+        )
         result = self.synthesis_chain.invoke(
             {
                 "mode": context.mode,
@@ -156,11 +189,27 @@ class ResumeRoastArena:
         result.scorecards = scorecards
         result.debate = debate
         result.council_decision = council_decision
+        logger.info(
+            "Final synthesis completed. prioritized_feedback=%s red_flags=%s elapsed_ms=%s",
+            len(result.prioritized_feedback),
+            len(result.red_flags),
+            round((perf_counter() - started_at) * 1000),
+        )
         return result
 
     def run(
         self, context: ResumeContext, agent_ids: list[str] | None = None
     ) -> ArenaResult:
+        started_at = perf_counter()
+        logger.info(
+            "Arena run started. requested_agents=%s target_role=%s target_company=%s mode=%s resume_chars=%s jd_chars=%s",
+            agent_ids or "all",
+            context.target_role or "Not specified",
+            context.target_company or "Not specified",
+            context.mode,
+            len(context.resume_text),
+            len(context.job_description),
+        )
         orchestration_plan = self.orchestrator.plan(
             context, requested_agent_ids=agent_ids
         )
@@ -178,10 +227,15 @@ class ResumeRoastArena:
             debate,
             orchestration_plan=orchestration_plan,
         )
-        return self.synthesize(
+        result = self.synthesize(
             context,
             scorecards,
             debate,
             council_decision,
             orchestration_plan=orchestration_plan,
         )
+        logger.info(
+            "Arena run completed. elapsed_ms=%s",
+            round((perf_counter() - started_at) * 1000),
+        )
+        return result

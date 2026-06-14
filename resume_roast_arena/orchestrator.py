@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import logging
+from time import perf_counter
+
 from langchain_core.prompts import ChatPromptTemplate
 
 from resume_roast_arena.config import OpenAIConfig, build_chat_model, require_openai_key
 from resume_roast_arena.prompts import AGENT_SPECS, ORCHESTRATOR_SYSTEM_PROMPT
 from resume_roast_arena.schemas import OrchestrationPlan, ResumeContext
+
+
+logger = logging.getLogger(__name__)
 
 
 ORCHESTRATOR_PROMPT = ChatPromptTemplate.from_messages(
@@ -50,7 +56,16 @@ class OrchestratorAgent:
     def plan(
         self, context: ResumeContext, requested_agent_ids: list[str] | None = None
     ) -> OrchestrationPlan:
+        started_at = perf_counter()
         requested_agent_ids = requested_agent_ids or []
+        logger.info(
+            "Orchestrator planning started. requested_agents=%s target_role=%s resume_chars=%s jd_chars=%s mode=%s",
+            requested_agent_ids or "all",
+            context.target_role or "Not specified",
+            len(context.resume_text),
+            len(context.job_description),
+            context.mode,
+        )
         plan = self.chain.invoke(
             {
                 "target_role": context.target_role or "Not specified",
@@ -64,7 +79,14 @@ class OrchestratorAgent:
                 "resume_text": context.resume_text,
             }
         )
-        return self._normalize_plan(plan, requested_agent_ids)
+        normalized = self._normalize_plan(plan, requested_agent_ids)
+        logger.info(
+            "Orchestrator planning completed. selected_agents=%s run_debate=%s elapsed_ms=%s",
+            normalized.selected_agent_ids,
+            normalized.run_debate,
+            round((perf_counter() - started_at) * 1000),
+        )
+        return normalized
 
     @staticmethod
     def _available_agents_text() -> str:

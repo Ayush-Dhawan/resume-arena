@@ -30,7 +30,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -326,13 +327,28 @@ button:disabled {
 }
 
 .form-block input,
-.form-block select {
+.form-block select,
+.form-block textarea {
   margin-top: 8px;
   width: 100%;
   border: 1px solid rgba(148, 163, 184, 0.3);
   background: #07111d;
   color: #f8fafc;
   padding: 11px 12px;
+}
+
+.form-block textarea {
+  min-height: 86px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.roast-error {
+  border: 1px solid rgba(255, 84, 72, 0.44);
+  background: rgba(255, 84, 72, 0.1);
+  color: #ffc6c1;
+  line-height: 1.4;
+  padding: 10px;
 }
 
 .form-block small {
@@ -427,6 +443,10 @@ button:disabled {
   box-shadow: 0 0 24px rgba(255, 106, 61, 0.38);
 }
 
+.arena.is-roasting .round-banner {
+  animation: bannerPulse 1.2s ease-in-out infinite;
+}
+
 .round-banner span,
 .round-banner strong {
   display: block;
@@ -478,6 +498,14 @@ button:disabled {
   padding: 10px 11px;
   box-shadow: 0 0 24px #79ecff, 0 0 64px rgba(56, 219, 224, 0.62);
   animation: hoverResume 2.6s ease-in-out infinite;
+}
+
+.arena.is-roasting .resume-hologram {
+  animation: hoverResume 1.4s ease-in-out infinite, hologramCharge 900ms ease-in-out infinite;
+}
+
+.arena.has-result .resume-hologram {
+  box-shadow: 0 0 30px #79ecff, 0 0 80px rgba(87, 229, 116, 0.44);
 }
 
 .mini-resume-page {
@@ -594,6 +622,36 @@ button:disabled {
   animation: scanBeam 1.7s linear infinite;
 }
 
+.arena.is-roasting .ats-beam {
+  opacity: 0.86;
+  animation-duration: 650ms;
+}
+
+.roast-status {
+  position: absolute;
+  left: 50%;
+  top: 74%;
+  z-index: 12;
+  min-width: 220px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(56, 219, 224, 0.44);
+  background: rgba(3, 10, 18, 0.82);
+  color: #b9fbff;
+  font-family: "Courier New", monospace;
+  font-size: 0.78rem;
+  font-weight: 900;
+  padding: 8px 12px;
+  text-align: center;
+  text-transform: uppercase;
+  box-shadow: 0 0 18px rgba(56, 219, 224, 0.24);
+}
+
+.arena.is-roasting .roast-status {
+  color: #ffe7a0;
+  border-color: rgba(255, 216, 74, 0.56);
+  animation: statusBlink 1s steps(2) infinite;
+}
+
 .agent-seat {
   z-index: 8;
   display: grid;
@@ -604,6 +662,10 @@ button:disabled {
 
 .agent-seat.active {
   filter: drop-shadow(0 0 14px color-mix(in srgb, currentColor 36%, transparent));
+}
+
+.agent-seat.is-thinking .agent-label {
+  animation: labelFlicker 900ms steps(2) infinite;
 }
 
 .agent-label {
@@ -731,6 +793,10 @@ button:disabled {
   filter: drop-shadow(0 14px 10px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 12px var(--agent-color));
 }
 
+.arena .agent-seat.is-thinking .sprite {
+  animation: thinkingBob 820ms ease-in-out infinite;
+}
+
 .sprite::before,
 .sprite::after {
   content: none;
@@ -855,6 +921,12 @@ button:disabled {
   border: 1px solid rgba(148, 163, 184, 0.18);
   background: rgba(10, 19, 31, 0.86);
   padding: 12px;
+  transition: border-color 220ms ease, transform 220ms ease, background 220ms ease;
+}
+
+.score-card.has-live-score {
+  border-color: rgba(56, 219, 224, 0.34);
+  background: linear-gradient(90deg, rgba(56, 219, 224, 0.08), rgba(10, 19, 31, 0.86));
 }
 
 .score-card .sprite {
@@ -887,6 +959,7 @@ button:disabled {
   display: block;
   height: 100%;
   box-shadow: 0 0 12px currentColor;
+  transition: width 700ms ease;
 }
 
 .red-flags {
@@ -938,6 +1011,56 @@ button:disabled {
   }
   50% {
     transform: translate(-50%, calc(-50% - 8px));
+  }
+}
+
+@keyframes hologramCharge {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.22);
+  }
+}
+
+@keyframes bannerPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 24px rgba(255, 106, 61, 0.38);
+  }
+  50% {
+    box-shadow: 0 0 36px rgba(255, 216, 74, 0.62);
+  }
+}
+
+@keyframes statusBlink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+@keyframes labelFlicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.68;
+  }
+}
+
+@keyframes thinkingBob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
   }
 }
 

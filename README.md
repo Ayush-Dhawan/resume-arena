@@ -53,6 +53,41 @@ This sends built-in sample resume/JD text through one persona agent and prints t
 
 Use `--mode bts` when you want direct analysis without debate-style lines.
 
+## Run The Backend Server
+
+Terminal 1:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn resume_roast_arena.server:app --reload --port 8001
+```
+
+The backend runs at `http://127.0.0.1:8001`.
+
+Useful endpoints:
+
+- `GET /health`
+- `POST /roast`
+
+## Run The Integrated Web Arena
+
+Terminal 2:
+
+```powershell
+cd web
+npm install
+npm run dev
+```
+
+Create `.env` in the repo root, not inside `web`, and add a real key:
+
+```text
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-5-mini
+```
+
+The web app posts parsed resume text to Next's `/api/roast` route. That route proxies to the Python FastAPI backend at `http://127.0.0.1:8001` by default. Set `RESUME_ARENA_BACKEND_URL` in `web/.env.local` only if your backend runs somewhere else.
+
 ## Available Agents
 
 - `orchestrator` (planning only)
